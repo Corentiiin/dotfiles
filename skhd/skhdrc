@@ -53,7 +53,7 @@ shift + alt - 8 : yabai -m window --space 7;
 
 # -- Starting apps -- 
 
-alt - b : open -na Arc
+alt - b : open -na Zen
 alt - t : open -na Terminal
 alt - q : yabai -m window --close
 

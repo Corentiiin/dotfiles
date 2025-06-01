@@ -26,7 +26,8 @@ local icons = {
       _50 = "􀺶",
       _25 = "􀛩",
       _0 = "􀛪",
-      charging = "􀢋"
+      charging = "􀢋",
+      time_remaining = "􀐱",
     },
     wifi = {
       upload = "􀄨",
@@ -34,11 +35,6 @@ local icons = {
       connected = "􀙇",
       disconnected = "􀙈",
       router = "􁓤",
-    },
-    media = {
-      back = "􀊊",
-      forward = "􀊌",
-      play_pause = "􀊈",
     },
   },
 
@@ -69,7 +65,7 @@ local icons = {
       _25 = "",
       _0 = "",
       charging = "",
-      time_remaining = "􀐱",
+      
     },
     wifi = {
       upload = "",

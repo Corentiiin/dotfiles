@@ -1,51 +1,34 @@
+-- Item to display the current date and time in a calendar forma
+
 local settings = require("settings")
 local colors = require("colors")
 
--- Padding item required because of bracket
-sbar.add("item", { position = "right", width = settings.group_paddings })
-
-local cal = sbar.add("item", {
+local calendar = sbar.add("item", {
+  position = "right",
+  -- Day, Month, Date 
   icon = {
-    color = colors.white,
     padding_left = 6,
     padding_right = 8,
     font = {
-      style = settings.font.style_map["SemiBold"],
-      family = settings.font.text,
-      size = 13.0,
+      size = 13,
     },
   },  
+  -- Time in HH:MM format
   label = {
-    color = colors.white,
-    padding_right = 11,
-    width = 49,
-    align = "right",
-    font = { family = settings.font.text, style = settings.font.style_map["SemiBold"], size = 13.0 },
+    padding_right = 12,
+    font = { 
+      family = settings.font.text, 
+      style = settings.font.style_map["Semibold"], 
+      size = 13
+    },
   },
-  position = "right",
-  update_freq = 30,
-  padding_left = 4,
-  padding_right = 5,
-  background = {
-    color = colors.transparent,
-    border_color = colors.transparent,
-    border_width = 0
-  },
+  update_freq = 60,
   click_script = "open -a 'Calendar'"
 })
 
--- Double border for calendar using a single item bracket
-sbar.add("bracket", { cal.name }, {
-  background = {
-    color = colors.transparent,
-    height = 30,
-    border_color = colors.grey,
-  }
-})
+calendar:subscribe({ "forced", "routine", "system_woke" }, function(env)
+  local day = os.date("%d") -- Get the day of the month
+  day = tostring(tonumber(day)) -- Convert to number to remove leading zero
 
--- Padding item required because of bracket
-sbar.add("item", { position = "right", width = settings.group_paddings })
-
-cal:subscribe({ "forced", "routine", "system_woke" }, function(env)
-  cal:set({ icon = os.date("%a %b %d"), label = os.date("%H:%M") })
+  calendar:set({ icon = os.date("%a %b ") .. day, label = os.date("%H:%M") })
 end)
