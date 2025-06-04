@@ -5,7 +5,7 @@ local app_icons = require("helpers.app_icons")
 
 local spaces = {}
 
-for i = 1, 8, 1 do
+for i = 1, 10, 1 do
   local space = sbar.add("space", "space." .. i, {
     space = i,
     icon = {
@@ -106,6 +106,13 @@ space_window_observer:subscribe("space_windows_change", function(env)
   local no_app = true
   for app, count in pairs(env.INFO.apps) do
     no_app = false
+
+    -- ERRASE AFTER FONT UPDATE
+    if app == "Zen" then
+      app = "Safari"
+    end
+    -- ERRASE AFTER FONT UPDATE
+
     local lookup = app_icons[app]
     local icon = ((lookup == nil) and app_icons["Default"] or lookup)
     icon_line = icon_line .. icon
