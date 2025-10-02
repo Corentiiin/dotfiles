@@ -15,11 +15,11 @@ yabai -m config layout bsp
 yabai -m config window_placement second_child
 
 # padding set to 8px
-yabai -m config top_padding 7
-yabai -m config bottom_padding 7
-yabai -m config left_padding 3
-yabai -m config right_padding 3
-yabai -m config window_gap 3
+yabai -m config top_padding 5 #7
+yabai -m config bottom_padding 0 #7
+yabai -m config left_padding 0 #3
+yabai -m config right_padding 0 #3
+yabai -m config window_gap 2 #3
 
 # -- mouse settings --
 yabai -m config focus_follows_mouse autoraise
@@ -38,11 +38,6 @@ yabai -m config mouse_action2 resize
 yabai -m mouse_drop_action swap
 
 
-# disable specific apps
-yabai -m rule --add app="^System Settings$" manage=off
-yabai -m rule --add app="^Calculator$" manage=off
-yabai -m rule --add app="^QuickTime Player$" manage=off
-
 yabai -m space 1 --label 1
 yabai -m space 2 --label 2
 yabai -m space 3 --label 3
@@ -53,3 +48,36 @@ yabai -m space 7 --label 7
 yabai -m space 8 --label 8
 yabai -m space 9 --label 9
 yabai -m space 10 --label 10
+
+
+# Apparence et comportement des fenêtres
+yabai -m config window_shadow float         # Ombre uniquement sur les fenêtres flottantes
+yabai -m config window_opacity on           # Active la transparence
+yabai -m config active_window_opacity 1.0   # Fenêtre active totalement opaque
+yabai -m config normal_window_opacity 0.90  # Fenêtres inactives légèrement transparentes
+yabai -m config split_ratio 0.5             # Divise l'espace en deux parts égales
+yabai -m config auto_balance on             # Rééquilibrage automatique des fenêtres
+
+# Applications en mode float
+yabai -m rule --add app="^System Settings$" manage=off
+yabai -m rule --add app="^Preview$" manage=off
+yabai -m rule --add app="^Calculator$" manage=off
+yabai -m rule --add app="^QuickTime Player$" manage=off
+yabai -m rule --add app="^Activity Monitor$" manage=off
+yabai -m rule --add app="^Finder$" manage=off
+
+# Applications sur des espaces spécifiques
+yabai -m rule --add app="^Discord$" space=6
+
+# Configuration multi-écrans
+yabai -m config display_arrangement_order default      # Ordre naturel des écrans
+yabai -m config focus_follows_mouse_display autofocus  # Focus automatique entre écrans
+
+# Optimisations
+yabai -m config window_topmost off            # Évite les problèmes de focus
+yabai -m config window_origin_display focused # Nouvelles fenêtres sur l'écran actif
+yabai -m config window_placement second_child # Meilleure prédictibilité du placement
+yabai -m config window_zoom_persist on        # Conserve le zoom après déplacement
+yabai -m config window_animation_duration 0.0
+yabai -m config window_animation_frame_rate 120
+yabai -m config window_opacity_duration 0.0

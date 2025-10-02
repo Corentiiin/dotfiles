@@ -55,7 +55,7 @@ shift + alt - 0 : yabai -m window --space 10;
 
 # -- Starting apps -- 
 
-alt - b : open -na Zen
+alt - b : open -na Safari
 alt - t : open -na Terminal
 alt - q : yabai -m window --close
 
