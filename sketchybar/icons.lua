@@ -36,6 +36,13 @@ local icons = {
       disconnected = "􀙈",
       router = "􁓤",
     },
+    apps = {
+        windows = "􂆂",
+        message = "􀌥",
+        terminal = "􀪏",
+        settings = "􀍟",
+        passwords = "􀟖",
+    },
   },
 
   -- Alternative NerdFont icons
@@ -73,6 +80,9 @@ local icons = {
       connected = "󰖩",
       disconnected = "󰖪",
       router = "Missing Icon"
+    },
+    apps = {
+        windows = "",
     },
   },
 }

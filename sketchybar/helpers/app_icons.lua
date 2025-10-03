@@ -1,3 +1,5 @@
+local icons = require("icons")
+
 return {
 	["Live"] = ":ableton:",
 	["Adobe Bridge"] = ":adobe_bridge:",
@@ -97,7 +99,9 @@ return {
 	["FreeTube"] = ":freetube:",
 	["Fusion"] = ":fusion:",
 	["System Preferences"] = ":gear:",
-	["System Settings"] = ":gear:",
+	["System Settings"] = icons.apps.settings,
+	["设置"] = ":gear:",
+	["Préférences Système"] = ":gear:",
 	["系统设置"] = ":gear:",
 	["Réglages Système"] = ":gear:",
 	["GitHub Desktop"] = ":git_hub:",
@@ -156,7 +160,7 @@ return {
 	["Marta"] = ":marta:",
 	["Matlab"] = ":matlab:",
 	["Mattermost"] = ":mattermost:",
-	["Messages"] = ":messages:",
+	["Messages"] = icons.apps.message,
 	["信息"] = ":messages:",
 	["Nachrichten"] = ":messages:",
 	["Messenger"] = ":messenger:",
@@ -266,7 +270,7 @@ return {
 	["Tana"] = ":tana:",
 	["TeamSpeak 3"] = ":team_speak:",
 	["Telegram"] = ":telegram:",
-	["Terminal"] = ":terminal:",
+	["Terminal"] = icons.apps.terminal,
 	["终端"] = ":terminal:",
 	["Typora"] = ":text:",
 	["Microsoft To Do"] = ":things:",
@@ -310,4 +314,6 @@ return {
 	["zoom.us"] = ":zoom:",
 	["Zotero"] = ":zotero:",
 	["Zulip"] = ":zulip:",
+	["Windows App"] = icons.apps.windows,
+	["Passwords"] = icons.apps.passwords,
 }

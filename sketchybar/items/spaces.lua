@@ -102,6 +102,17 @@ local space_window_observer = sbar.add("item", {
 })
 
 space_window_observer:subscribe("space_windows_change", function(env)
+
+  -- local file = io.open("/tmp/sketchybar_apps.log", "a")
+  -- if file then
+  --   file:write("--- Apps in space " .. env.INFO.space .. " ---\n")
+  --   for app, count in pairs(env.INFO.apps) do
+  --     file:write("App name: " .. app .. "\n")
+  --   end
+  --   file:write("\n")
+  --   file:close()
+  -- end
+  
   local icon_line = " "
   local no_app = true
   for app, count in pairs(env.INFO.apps) do
