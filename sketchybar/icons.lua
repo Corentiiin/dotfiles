@@ -35,6 +35,7 @@ local icons = {
       connected = "􀙇",
       disconnected = "􀙈",
       router = "􁓤",
+      hotspot = "􀉤",
     },
     apps = {
         windows = "􂆂",

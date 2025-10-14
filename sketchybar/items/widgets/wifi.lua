@@ -4,10 +4,9 @@ local icons = require("icons")
 local colors = require("colors")
 local settings = require("settings")
 
-local popup_width = 250
-
 local wifi = sbar.add("item", "widgets.wifi.padding", {
   position = "right",
+  align = "center",
   icon = {
     padding_left = 6,
   },
@@ -16,156 +15,70 @@ local wifi = sbar.add("item", "widgets.wifi.padding", {
   },
 })
 
--- Background around the item
-local wifi_bracket = sbar.add("bracket", "widgets.wifi.bracket", {
-  wifi.name,
-}, {
-  background = { color = colors.transparent },
-  popup = { align = "right", height = 30, border_width = 0, border_color = colors.transparent },
-})
-
-local ssid = sbar.add("item", {
-  position = "popup." .. wifi_bracket.name,
-  icon = {
-    font = {
-      style = settings.font.style_map["Bold"]
-    },
-    string = icons.wifi.router,
-  },
-  width = popup_width,
-  align = "center",
-  label = {
-    font = {
-      size = 15,
-      style = settings.font.style_map["Bold"]
-    },
-    max_chars = 18,
-    string = "????????????",
-  },
-  background = {
-    height = 2,
-    color = colors.grey,
-    y_offset = -15
-  }
-})
-
-local hostname = sbar.add("item", {
-  position = "popup." .. wifi_bracket.name,
-  icon = {
-    align = "left",
-    string = "Hostname:",
-    width = popup_width / 2,
-  },
-  label = {
-    max_chars = 20,
-    string = "????????????",
-    width = popup_width / 2,
-    align = "right",
-  }
-})
-
-local ip = sbar.add("item", {
-  position = "popup." .. wifi_bracket.name,
-  icon = {
-    align = "left",
-    string = "IP:",
-    width = popup_width / 2,
-  },
-  label = {
-    string = "???.???.???.???",
-    width = popup_width / 2,
-    align = "right",
-  }
-})
-
-local mask = sbar.add("item", {
-  position = "popup." .. wifi_bracket.name,
-  icon = {
-    align = "left",
-    string = "Subnet mask:",
-    width = popup_width / 2,
-  },
-  label = {
-    string = "???.???.???.???",
-    width = popup_width / 2,
-    align = "right",
-  }
-})
-
-local router = sbar.add("item", {
-  position = "popup." .. wifi_bracket.name,
-  icon = {
-    align = "left",
-    string = "Router:",
-    width = popup_width / 2,
-  },
-  label = {
-    string = "???.???.???.???",
-    width = popup_width / 2,
-    align = "right",
-  },
-})
-
 wifi:subscribe({"wifi_change", "system_woke"}, function(env)
-  sbar.exec("ipconfig getifaddr en0", function(ip)
-    local connected = not (ip == "")
+  -- get SSID first to detect Personal Hotspot (iPhone) and connectivity
+  sbar.exec("networksetup -getairportnetwork en0", function(ssid_info)
+    local connected = false
+    local ssid = ""
+    if ssid_info and ssid_info:match(":") then
+      -- format: "Current Wi-Fi Network: SSID_NAME"
+      ssid = ssid_info:match(": (.+)") or ""
+      connected = ssid ~= nil and ssid ~= ""
+    end
+
+    -- fallback: check IP on several interfaces if SSID parsing fails
+    if not connected then
+      -- try common interfaces (en0,en1,en2) and return first non-empty IP
+      local ip_cmd = [[sh -c "ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || ipconfig getifaddr en2 2>/dev/null"]]
+      sbar.exec(ip_cmd, function(ip)
+        connected = not (ip == "" or ip == nil)
+        -- continue to set icon after IP check
+        local s = (ssid or ""):lower()
+        local is_hotspot = s:match("iphone") or s:match("hotspot") or s:match("personal")
+        local wifi_icon = icons.wifi.disconnected
+        local color = colors.white
+        if connected then
+          -- prefer hotspot icon if available
+          wifi_icon = (is_hotspot and (icons.wifi.hotspot or icons.wifi.connected)) or icons.wifi.connected
+          color = colors.blue
+        end
+        wifi:set({
+          align = "center",
+          icon = {
+            string = wifi_icon,
+            color = color,
+            background = {
+              color = colors.liquid_glass.selected.bg or colors.selected_bg,
+              height = 22,
+              border_width = 0,
+              border_color = colors.liquid_glass.glow,
+              corner_radius = 12,
+              drawing = true,
+            },
+            padding_right = 6
+          },
+        })
+      end)
+      return
+    end
+
+    local s = (ssid or ""):lower()
+    local is_hotspot = s:match("iphone") or s:match("hotspot") or s:match("personal")
+    local wifi_icon = (is_hotspot and (icons.wifi.hotspot or icons.wifi.connected)) or icons.wifi.connected
     wifi:set({
       icon = {
-        string = connected and icons.wifi.connected or icons.wifi.disconnected,
-        color = connected and colors.white or colors.grey,
+        align = "center",
+        string = wifi_icon,
+        color = colors.blue,
+        background = {
+          color = colors.liquid_glass.selected.bg or colors.selected_bg,
+          height = 22,
+          border_width = 0,
+          border_color = colors.liquid_glass.glow,
+          corner_radius = 12,
+          drawing = true,
+        },
       },
     })
   end)
 end)
-
-local function hide_details()
-  wifi_bracket:set({ popup = { drawing = false, border_color = colors.transparent,
-    corner_radius = 0 } })
-  wifi:set({ background = { color = colors.transparent } })
-end
-
-local function toggle_details()
-  local should_draw = wifi_bracket:query().popup.drawing == "off"
-  if should_draw then
-    wifi_bracket:set({ popup = { drawing = true }})
-    wifi:set({ background = { color = colors.selected_bg } })
-    sbar.exec("networksetup -getcomputername", function(result)
-      hostname:set({ label = result })
-    end)
-    sbar.exec("ipconfig getifaddr en0", function(result)
-      ip:set({ label = result })
-    end)
-    sbar.exec("ipconfig getsummary en0 | awk -F ' SSID : '  '/ SSID : / {print $2}'", function(result)
-      ssid:set({ label = result })
-    end)
-    sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Subnet mask: ' '/^Subnet mask: / {print $2}'", function(result)
-      mask:set({ label = result })
-    end)
-    sbar.exec("networksetup -getinfo Wi-Fi | awk -F 'Router: ' '/^Router: / {print $2}'", function(result)
-      router:set({ label = result })
-    end)
-  else
-    hide_details()
-  end
-end
-
-
-wifi:subscribe("mouse.clicked", toggle_details)
-wifi:subscribe("mouse.exited.global", hide_details)
-
-
--- Copy label to clipboard on click
-local function copy_label_to_clipboard(env)
-  local label = sbar.query(env.NAME).label.value
-  sbar.exec("echo \"" .. label .. "\" | pbcopy")
-  sbar.set(env.NAME, { label = { string = icons.clipboard, align="center" } })
-  sbar.delay(1, function()
-    sbar.set(env.NAME, { label = { string = label, align = "right" } })
-  end)
-end
-
-ssid:subscribe("mouse.clicked", copy_label_to_clipboard)
-hostname:subscribe("mouse.clicked", copy_label_to_clipboard)
-ip:subscribe("mouse.clicked", copy_label_to_clipboard)
-mask:subscribe("mouse.clicked", copy_label_to_clipboard)
-router:subscribe("mouse.clicked", copy_label_to_clipboard)

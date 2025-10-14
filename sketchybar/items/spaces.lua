@@ -4,80 +4,89 @@ local settings = require("settings")
 local app_icons = require("helpers.app_icons")
 
 local spaces = {}
+local space_labels = {}
+local children = {}
+
+-- create a native sketchybar bracket "spaces" that matches all space.* items
+local function hex(v) return string.format("0x%08x", v) end
+local bracket_cmd = table.concat({
+  "sketchybar",
+  "--add", "bracket", "spaces", "apple_logo", "'/space\\..*/'",
+
+  "--set", "spaces",
+    "background.color=" .. hex(colors.with_alpha(colors.liquid_glass.tint, 0.20)),
+    "background.corner_radius=12",
+    "background.height=30",
+    "background.border_width=1",
+    "background.border_color=" .. hex(colors.liquid_glass.border),
+}, " ")
+
+sbar.exec(bracket_cmd)
 
 for i = 1, 10, 1 do
-  local space = sbar.add("space", "space." .. i, {
+  -- create per-index backgrounds (hidden by default, shown when selected)
+  local idx = i
+  local bg = {
+    color = colors.liquid_glass.clear,
+    height = 22,
+    border_width = 0,
+    border_color = colors.liquid_glass.border,
+    corner_radius = 12,
+    drawing = false,                              -- hidden by default
+    padding_left = (idx == 1) and 5 or 0,
+    padding_right = (idx == 8) and 5 or 0,
+  }
+
+  local sel_bg = {
+    color = colors.liquid_glass.selected.bg or colors.selected_bg,
+    height = 22,
+    border_width = 0,
+    border_color = colors.liquid_glass.glow,
+    corner_radius = 12,
+    drawing = true,
+    padding_left = (idx == 1) and 5 or 0,
+    padding_right = (idx == 8) and 5 or 0,
+  }
+
+  local space = sbar.add("space", "space." .. idx, {
     space = i,
     icon = {
       font = { family = settings.font.typeface, size = 13.0 },
       string = i,
-      padding_left = 8,
-      padding_right = 8,
-      highlight_color = colors.white,
+      padding_left = 10,
+      padding_right = 3,
+      color = colors.white,
+      highlight_color = colors.blue,
     },
     label = {
-      padding_right = 20,
+      padding_left = 3,
+      padding_right = 10,
       color = colors.white,
-      highlight_color = colors.white,
+      highlight_color = colors.blue,   -- couleur utilisée quand highlight=true
       font = "sketchybar-app-font:Regular:13.0",
-      y_offset = -1,
     },
-    padding_right = 0,
-    padding_left = 0,
-    background = {
-     color = colors.transparent,
-     height = 26,
-     border_width = 0,
-     border_color = colors.transparent,
-    },
-    popup = { background = { border_width = 5, border_color = colors.black } }
+    background = bg, -- start with hidden bg; sel_bg will be applied when selected
   })
 
-  spaces[i] = space
+  spaces[idx] = space
+  space_labels[idx] = " "
 
-  -- Single item bracket for space items to achieve double border on highlight
-  --local space_bracket = sbar.add("bracket", { space.name }, {
-  --  background = {
-  --    color = colors.transparent,
-  --    border_color = colors.bg2,
-  --    height = 23,
-  --    border_width = 1
-  --  }
-  --})
+  -- ensure the space is a child of the bracket
+  space:set({ parent = "spaces" })
 
-  -- -- Padding space
-  -- sbar.add("space", "space.padding." .. i, {
-  --   space = i,
-  --   script = "",
-  --   width = settings.group_paddings,
-  -- })
-
-  local space_popup = sbar.add("item", {
-    position = "popup." .. space.name,
-    padding_left= 5,
-    padding_right= 0,
-    background = {
-      drawing = true,
-      image = {
-        corner_radius = 9,
-        scale = 0.2
-      }
-    }
-  })
-
+  -- capture idx for the closure (already captured above)
   space:subscribe("space_change", function(env)
     local selected = env.SELECTED == "true"
-    local color = selected and colors.selected_bg or colors.transparent
-    local style = selected and "Black" or "Regular"
     space:set({
-      icon = { highlight = selected, },
-      label = { highlight = selected, },
-      background = { 
-        color = color,
-        border_color = colors.transparent,
-        drawing = selected,
-        corner_radius = 4,
-      }
+      icon = {
+        highlight = selected,
+        color = selected and colors.blue or colors.white,
+      },
+      label = {
+        highlight = selected,
+        color = selected and colors.blue or colors.white,
+      },
+      background = (selected and sel_bg) or bg,
     })
   end)
 
@@ -102,27 +111,11 @@ local space_window_observer = sbar.add("item", {
 })
 
 space_window_observer:subscribe("space_windows_change", function(env)
-
-  -- local file = io.open("/tmp/sketchybar_apps.log", "a")
-  -- if file then
-  --   file:write("--- Apps in space " .. env.INFO.space .. " ---\n")
-  --   for app, count in pairs(env.INFO.apps) do
-  --     file:write("App name: " .. app .. "\n")
-  --   end
-  --   file:write("\n")
-  --   file:close()
-  -- end
   
-  local icon_line = " "
+  local icon_line = ""
   local no_app = true
   for app, count in pairs(env.INFO.apps) do
     no_app = false
-
-    -- ERRASE AFTER FONT UPDATE
-    if app == "Zen" then
-      app = "Safari"
-    end
-    -- ERRASE AFTER FONT UPDATE
 
     local lookup = app_icons[app]
     local icon = ((lookup == nil) and app_icons["Default"] or lookup)
@@ -130,9 +123,12 @@ space_window_observer:subscribe("space_windows_change", function(env)
   end
 
   if (no_app) then
-    icon_line = " —"
+    icon_line = ""
   end
-  sbar.animate("tanh", 10, function()
+
+  -- update tracked label then animate and resize container
+  space_labels[env.INFO.space] = icon_line
+  sbar.animate("tanh", 8, function()
     spaces[env.INFO.space]:set({ label = icon_line })
   end)
 end)
