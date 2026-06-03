@@ -1,84 +1,60 @@
--- Widget to display Wi-Fi status and details in SketchyBar
-
-local icons = require("icons")
+local icons  = require("icons")
 local colors = require("colors")
-local settings = require("settings")
 
 local wifi = sbar.add("item", "widgets.wifi.padding", {
-  position = "right",
-  align = "center",
-  icon = {
-    padding_left = 6,
-  },
-  label = {
-    padding_right = 6,
-  },
+  position     = "right",
+  padding_left = 4,   -- inter-item gap between volume and wifi
+  icon         = { padding_left = 5, padding_right = 5 },
+  label        = { drawing = false },
 })
 
-wifi:subscribe({"wifi_change", "system_woke"}, function(env)
-  -- get SSID first to detect Personal Hotspot (iPhone) and connectivity
-  sbar.exec("networksetup -getairportnetwork en0", function(ssid_info)
-    local connected = false
-    local ssid = ""
-    if ssid_info and ssid_info:match(":") then
-      -- format: "Current Wi-Fi Network: SSID_NAME"
-      ssid = ssid_info:match(": (.+)") or ""
-      connected = ssid ~= nil and ssid ~= ""
-    end
+local wifi_bracket = sbar.add("bracket", "widgets.wifi.bracket", {
+  wifi.name,
+}, {
+  background = { color = colors.transparent },
+})
 
-    -- fallback: check IP on several interfaces if SSID parsing fails
-    if not connected then
-      -- try common interfaces (en0,en1,en2) and return first non-empty IP
-      local ip_cmd = [[sh -c "ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || ipconfig getifaddr en2 2>/dev/null"]]
-      sbar.exec(ip_cmd, function(ip)
-        connected = not (ip == "" or ip == nil)
-        -- continue to set icon after IP check
-        local s = (ssid or ""):lower()
-        local is_hotspot = s:match("iphone") or s:match("hotspot") or s:match("personal")
-        local wifi_icon = icons.wifi.disconnected
-        local color = colors.white
-        if connected then
-          -- prefer hotspot icon if available
-          wifi_icon = (is_hotspot and (icons.wifi.hotspot or icons.wifi.connected)) or icons.wifi.connected
-          color = colors.blue
-        end
-        wifi:set({
-          align = "center",
-          icon = {
-            string = wifi_icon,
-            color = color,
-            background = {
-              color = colors.liquid_glass.selected.bg or colors.selected_bg,
-              height = 22,
-              border_width = 0,
-              border_color = colors.liquid_glass.glow,
-              corner_radius = 12,
-              drawing = true,
-            },
-            padding_right = 6
+-- ── Update ─────────────────────────────────────────────────────────────────────
+local function update_wifi()
+  -- ipconfig getsummary is reliable on macOS 26+ (networksetup broken on Tahoe)
+  sbar.exec(
+    "iface=$(networksetup -listallhardwareports 2>/dev/null"
+    .. " | awk '/Wi-Fi/{getline; print $2; exit}');"
+    .. " ipconfig getsummary \"$iface\" 2>/dev/null",
+    function(result)
+      result = result or ""
+      local ssid      = (result:match("SSID : ([^\n]+)") or ""):gsub("^%s*", ""):gsub("%s*$", "")
+      local router_ip = (result:match("[Rr]outer : ([^\n]+)") or ""):gsub("^%s*", ""):gsub("%s*$", "")
+      local connected = ssid ~= ""
+
+      local sl = ssid:lower()
+      -- Primary: iPhone hotspot = 172.20.10.0/28, Android = 192.168.43.x
+      -- Fallback: SSID keyword matching for custom names
+      local is_hotspot = router_ip:match("^172%.20%.10%.")
+                      or router_ip:match("^192%.168%.43%.")
+                      or sl:match("iphone") or sl:match("hotspot")
+                      or sl:match("personal") or sl:match("partage")
+                      or sl:match("ipad") or sl:match("android")
+
+      local icon = connected and (is_hotspot and icons.wifi.hotspot or icons.wifi.router)
+                             or icons.wifi.disconnected
+
+      wifi:set({
+        icon = {
+          string = icon,
+          color  = connected and colors.blue or colors.white,
+          background = {
+            color         = colors.liquid_glass.selected.bg,
+            height        = 22,
+            corner_radius = 12,
+            drawing       = connected,
           },
-        })
-      end)
-      return
-    end
-
-    local s = (ssid or ""):lower()
-    local is_hotspot = s:match("iphone") or s:match("hotspot") or s:match("personal")
-    local wifi_icon = (is_hotspot and (icons.wifi.hotspot or icons.wifi.connected)) or icons.wifi.connected
-    wifi:set({
-      icon = {
-        align = "center",
-        string = wifi_icon,
-        color = colors.blue,
-        background = {
-          color = colors.liquid_glass.selected.bg or colors.selected_bg,
-          height = 22,
-          border_width = 0,
-          border_color = colors.liquid_glass.glow,
-          corner_radius = 12,
-          drawing = true,
         },
-      },
-    })
-  end)
-end)
+      })
+    end
+  )
+end
+
+wifi:subscribe({ "wifi_change", "system_woke", "forced" }, function(_) update_wifi() end)
+
+update_wifi()

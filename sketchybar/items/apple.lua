@@ -34,5 +34,4 @@ local apple = sbar.add("item", "apple_logo", {
   click_script = "$CONFIG_DIR/helpers/menus/bin/menus -s 0"
 })
 
--- attach the apple logo item to the container so the container background is the visible box
-apple:set({ parent = "apple.container" })
+-- apple_logo is included directly in the spaces bracket (see spaces.lua)

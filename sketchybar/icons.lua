@@ -34,8 +34,14 @@ local icons = {
       download = "􀄩",
       connected = "􀙇",
       disconnected = "􀙈",
-      router = "􁓤",
+      router = "􀙇",
       hotspot = "􀉤",
+    },
+    audio = {
+      airpods     = "􁐘",
+      airpods_pro = "􀪷",
+      airpods_max = "􀺹",
+      homepod     = "􀟣",
     },
     apps = {
         windows = "􂆂",
@@ -80,7 +86,8 @@ local icons = {
       download = "",
       connected = "󰖩",
       disconnected = "󰖪",
-      router = "Missing Icon"
+      router = "󰈀",
+      hotspot = "󰖧",
     },
     apps = {
         windows = "",
