@@ -31,7 +31,7 @@ yabai -m config mouse_action2       resize
 yabai -m config mouse_drop_action   swap
 
 # ── Window Appearance ─────────────────────────────────────────────────────────
-yabai -m config window_shadow           float
+yabai -m config window_shadow           on
 yabai -m config window_opacity          on
 yabai -m config active_window_opacity   1.0
 yabai -m config normal_window_opacity   0.95
@@ -53,9 +53,8 @@ yabai -m rule --add app="^System Settings$"  manage=off
 yabai -m rule --add app="^Calculator$"       manage=off
 yabai -m rule --add app="^Activity Monitor$" manage=off
 yabai -m rule --add app="^Finder$"           manage=off
-yabai -m rule --add app="^Structured$"       manage=off
-yabai -m rule --add app="^Preview$"          manage=off
 yabai -m rule --add app="^QuickTime Player$" manage=off
+yabai -m rule --add app="^FaceTime$"         manage=off
 
 # ── Space Assignment ──────────────────────────────────────────────────────────
 yabai -m rule --add app="^Discord$" space=6
@@ -65,9 +64,16 @@ yabai -m config display_arrangement_order default
 
 # ── SketchyBar Refresh Signals ────────────────────────────────────────────────
 # Claude Desktop (Electron) doesn't emit space_windows_change reliably;
-# trigger a full space refresh on any window lifecycle event for that app
+# trigger a full space refresh on window lifecycle events for that app.
+# window_moved is intentionally excluded: it fires continuously during a drag
+# and never changes which windows are visible on a space.
 yabai -m signal --add event=window_created     app="^Claude$" action="sketchybar --trigger force_space_refresh"
 yabai -m signal --add event=window_destroyed   app="^Claude$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_moved       app="^Claude$" action="sketchybar --trigger force_space_refresh"
 yabai -m signal --add event=window_minimized   app="^Claude$" action="sketchybar --trigger force_space_refresh"
 yabai -m signal --add event=window_deminimized app="^Claude$" action="sketchybar --trigger force_space_refresh"
+
+# Preview/Aperçu (floating document windows) doesn't emit space_windows_change reliably
+yabai -m signal --add event=window_created     app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
+yabai -m signal --add event=window_destroyed   app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
+yabai -m signal --add event=window_minimized   app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
+yabai -m signal --add event=window_deminimized app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"

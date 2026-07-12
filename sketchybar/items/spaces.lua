@@ -11,7 +11,7 @@ sbar.exec(table.concat({
   "--add", "bracket", "spaces", "apple_logo", "'/space\\..*/'",
   "--set", "spaces",
     "background.color="        .. hex(colors.with_alpha(colors.liquid_glass.tint, 0.20)),
-    "background.corner_radius=12",
+    "background.corner_radius=15",
     "background.height=30",
     "background.border_width=1",
     "background.border_color=" .. hex(colors.liquid_glass.border),

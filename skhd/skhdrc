@@ -56,10 +56,10 @@ alt - 0 : yabai -m space --focus 10 || yabai -m space --focus recent
 # Only spaces 9 and 10 can be destroyed; spaces 1-8 are permanent
 alt + shift - n : yabai -m space --create
 alt + shift - d : \
-    SPACE_INDEX=$(yabai -m query --spaces --space | jq .index); \
+    SPACE_INDEX=$(yabai -m query --spaces --space | sed -n 's/.*"index":\([0-9]*\).*/\1/p'); \
     [ "$SPACE_INDEX" -gt 8 ] && yabai -m space --destroy
 
 # ── App Launchers ──────────────────────────────────────────────────────────────
-alt - b : open -na Safari
+alt - b : open -na Firefox
 alt - t : open -na Terminal
 alt - q : yabai -m window --close
