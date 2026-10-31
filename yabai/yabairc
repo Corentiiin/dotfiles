@@ -55,15 +55,17 @@ yabai -m rule --add app="^FaceTime$"         manage=off
 yabai -m rule --add app="^Discord$" space=6
 
 # ── SketchyBar Refresh Signals ────────────────────────────────────────────────
-# Claude Desktop (Electron) doesn't emit space_windows_change reliably;
-# trigger a full space refresh on window lifecycle events for that app.
+# sketchybar's own space_windows_change fires before yabai has updated its
+# window list (e.g. an app that just quit is still listed), and some apps
+# (Claude Desktop, Preview) don't emit it reliably at all. yabai signals run
+# after its state is up to date, so they drive the space icons for every app.
 # window_moved is intentionally excluded: it fires continuously during a drag
 # and never changes which windows are visible on a space.
-# Preview/Aperçu (floating document windows) has the same problem.
 # Labels make the signals idempotent if this file is sourced again without a restart.
-for event in window_created window_destroyed window_minimized window_deminimized; do
+for event in window_created window_destroyed window_minimized window_deminimized \
+             application_launched application_terminated application_hidden application_visible; do
     yabai -m signal --add label="sketchybar_$event" event="$event" \
-        app="^(Claude|Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
+        action="sketchybar --trigger force_space_refresh"
 done
 
 # ── Apply Rules ───────────────────────────────────────────────────────────────

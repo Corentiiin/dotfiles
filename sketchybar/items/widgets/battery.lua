@@ -28,7 +28,6 @@ local battery = sbar.add("item", "widgets.battery", {
     padding_right = 10,
   },
   background  = { drawing = true, color = colors.transparent },
-  update_freq = 60,
   click_script = "open 'x-apple.systempreferences:com.apple.Battery-Settings.extension'",
 })
 
@@ -43,32 +42,35 @@ local function icon_for_charge(charge)
   end
 end
 
-battery:subscribe({ "routine", "forced", "power_source_change", "system_woke" }, function()
-  sbar.exec("pmset -g batt", function(batt_info)
-    local found, _, charge = batt_info:find("(%d+)%%")
-    charge = found and tonumber(charge) or nil
+-- battery_change comes from helpers/bar_events as soon as macOS updates the
+-- power source (PERCENT, CHARGING, AC), so nothing is polled
+sbar.add("event", "battery_change")
 
-    -- "AC Power" alone also covers "charged" / "not charging": only show the bolt
-    -- while the battery is actually filling up
-    local charging = batt_info:find("; charging;") or batt_info:find("finishing charge")
+battery:subscribe("battery_change", function(env)
+  local charge   = tonumber(env.PERCENT)
+  local charging = env.CHARGING == "1"
 
-    local icon
-    if charging then   icon = icons.battery.charging
-    elseif charge then icon = icon_for_charge(charge)
-    else               icon = icons.battery._0
-    end
+  local icon
+  if charging then   icon = icons.battery.charging
+  elseif charge then icon = icon_for_charge(charge)
+  else               icon = icons.battery._0
+  end
 
-    -- Like macOS: the battery turns red when low, green while charging
-    local glyph_color = colors.label
-    if charging then
-      glyph_color = colors.green
-    elseif charge and charge <= 20 then
-      glyph_color = colors.red
-    end
+  -- Like macOS: the battery turns red when low, green while charging
+  local glyph_color = colors.label
+  if charging then
+    glyph_color = colors.green
+  elseif charge and charge <= 20 then
+    glyph_color = colors.red
+  end
 
-    battery:set({
-      icon  = { string = charge and (charge .. " %") or "–" },
-      label = { string = icon, color = glyph_color },
-    })
-  end)
+  battery:set({
+    icon  = { string = charge and (charge .. " %") or "–" },
+    label = { string = icon, color = glyph_color },
+  })
+end)
+
+-- After a reload or wake, ask the helper to resend the current state
+battery:subscribe({ "forced", "system_woke" }, function(_)
+  sbar.exec("pkill -USR1 -x bar_events")
 end)

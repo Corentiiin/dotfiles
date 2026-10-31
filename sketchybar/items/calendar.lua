@@ -20,9 +20,6 @@ local calendar = sbar.add("item", "calendar", {
     padding_right = 10,
   },
   background   = { drawing = true, color = colors.transparent },
-  -- Short interval: routine ticks aren't aligned to the minute, so 60 s could
-  -- leave the clock up to a minute behind. os.date is cheap (no process spawn).
-  update_freq  = 10,
   click_script = "open -a 'Calendar'",
 })
 
@@ -34,6 +31,8 @@ local function update_calendar()
   calendar:set({ label = { string = date .. "  " .. os.date("%H:%M") } })
 end
 
-calendar:subscribe({ "forced", "routine", "system_woke" }, function(_) update_calendar() end)
+-- clock_tick comes from helpers/bar_events at second 00 of every minute
+sbar.add("event", "clock_tick")
+calendar:subscribe({ "clock_tick", "forced", "system_woke" }, function(_) update_calendar() end)
 
 update_calendar()

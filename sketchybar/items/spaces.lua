@@ -210,9 +210,16 @@ local function resolve_bundle(app)
   end)
 end
 
--- One yabai query refreshes every space (sbar.exec decodes the JSON into a table)
+-- One yabai query refreshes every space (sbar.exec decodes the JSON into a table).
+-- Queries can complete out of order: only the latest one may update the bar, so
+-- an older snapshot (still listing an app that just quit) never wins.
+local refresh_generation = 0
+
 local function refresh()
+  refresh_generation = refresh_generation + 1
+  local generation = refresh_generation
   sbar.exec("yabai -m query --windows 2>/dev/null", function(windows)
+    if generation ~= refresh_generation then return end
     if type(windows) ~= "table" then return end
 
     local by_space = {}
@@ -239,8 +246,8 @@ local function refresh()
 end
 
 -- ── Events ────────────────────────────────────────────────────────────────────
--- force_space_refresh is a named event triggered by yabai signals for apps
--- (e.g. Claude Desktop) that don't emit space_windows_change reliably
+-- force_space_refresh is triggered by yabai signals once yabai's window list is
+-- up to date (see yabairc); space_windows_change alone can be stale
 sbar.add("event", "force_space_refresh")
 
 local observer = sbar.add("item", "spaces.observer", { drawing = false, updates = true })
