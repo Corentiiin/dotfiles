@@ -127,10 +127,18 @@ local function paint(i)
   local number_color = s.selected and colors.label
     or (#s.apps > 0 and colors.secondary_label or colors.tertiary_label)
 
-  sbar.animate("tanh", 12, function()
+  -- Every space item receives space_change and every refresh repaints all
+  -- spaces: only touch the ones that actually change. No animation: fading a
+  -- bracket redraws the whole bar every frame (~150 ms CPU per switch instead
+  -- of ~12 ms) and sketchybar 2.22 animations can segfault in bar_draw.
+  if s.painted_fill ~= fill then
+    s.painted_fill = fill
     segments[i]:set({ background = { color = fill, border_color = rim } })
+  end
+  if s.painted_number ~= number_color then
+    s.painted_number = number_color
     numbers[i]:set({ icon = { color = number_color } })
-  end)
+  end
 end
 
 -- ── App Icons ─────────────────────────────────────────────────────────────────
@@ -252,7 +260,9 @@ sbar.add("event", "force_space_refresh")
 
 local observer = sbar.add("item", "spaces.observer", { drawing = false, updates = true })
 observer:subscribe({
-  "space_windows_change", "force_space_refresh", "front_app_switched",
+  -- No front_app_switched: focusing another app doesn't change which windows
+  -- live on which space, and it would cost a yabai query on every cmd-tab
+  "space_windows_change", "force_space_refresh",
   "display_change", "system_woke", "forced",
 }, function(_) refresh() end)
 
