@@ -32,13 +32,24 @@ Menu.__index = Menu
 function M.new(parent)
   -- A tiny minimum cell lets every row define its own height
   parent:set({ popup = { align = "right", height = 4 } })
-  return setmetatable({ parent = parent, parts = {}, palette = colors.menu.light, is_open = false }, Menu)
+  return setmetatable({ parent = parent, parts = {}, palette = colors.menu.light, is_open = false,
+                        generation = 0 }, Menu)
 end
 
 -- ── Lifecycle ─────────────────────────────────────────────────────────────────
 function Menu:clear()
   for _, item in ipairs(self.parts) do sbar.remove(item.name) end
   self.parts = {}
+  -- Hover events can still arrive for removed rows: they check this to stay quiet
+  self.generation = self.generation + 1
+end
+
+-- Subscribes a row handler that is ignored once the row has been removed
+function Menu:on(item, event, handler)
+  local generation = self.generation
+  item:subscribe(event, function(env)
+    if generation == self.generation then handler(env) end
+  end)
 end
 
 function Menu:build()
@@ -80,10 +91,6 @@ function Menu:add(props, kind, slider_width)
   local item = (kind == "slider") and sbar.add("slider", slider_width, props) or sbar.add("item", props)
   table.insert(self.parts, item)
   return item
-end
-
-local function on_click(item, callback)
-  if callback then item:subscribe("mouse.clicked", function(env) callback(env) end) end
 end
 
 -- Transparent row used for vertical breathing room
@@ -131,7 +138,7 @@ function Menu:title(text, toggle)
     }
   end
   local item = self:add(props)
-  if toggle then on_click(item, toggle.on_click) end
+  if toggle and toggle.on_click then self:on(item, "mouse.clicked", toggle.on_click) end
   return item
 end
 
@@ -225,14 +232,14 @@ function Menu:circle_row(text, glyph, active, callback)
   })
 
   if not active then
-    item:subscribe("mouse.entered", function(_)
+    self:on(item, "mouse.entered", function(_)
       item:set({ icon = { background = { color = p.circle_hover } } })
     end)
-    item:subscribe("mouse.exited", function(_)
+    self:on(item, "mouse.exited", function(_)
       item:set({ icon = { background = { color = p.circle } } })
     end)
   end
-  on_click(item, callback)
+  if callback then self:on(item, "mouse.clicked", callback) end
   return item
 end
 
@@ -250,9 +257,9 @@ function Menu:action(text, callback)
     },
     background = { drawing = true, color = colors.transparent, height = 26, corner_radius = 8 },
   })
-  item:subscribe("mouse.entered", function(_) item:set({ background = { color = p.hover } }) end)
-  item:subscribe("mouse.exited", function(_) item:set({ background = { color = colors.transparent } }) end)
-  on_click(item, callback)
+  self:on(item, "mouse.entered", function(_) item:set({ background = { color = p.hover } }) end)
+  self:on(item, "mouse.exited", function(_) item:set({ background = { color = colors.transparent } }) end)
+  if callback then self:on(item, "mouse.clicked", callback) end
   return item
 end
 

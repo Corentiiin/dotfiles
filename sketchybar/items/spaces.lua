@@ -285,7 +285,10 @@ for i = 1, MAX_SPACES do
   for j = 1, MAX_ICONS do table.insert(parts, app_slots[i][j]) end
   for _, part in ipairs(parts) do
     part:subscribe("mouse.entered", hover(true))
-    part:subscribe({ "mouse.exited", "mouse.exited.global" }, hover(false))
+    -- Not mouse.exited.global: it reaches every subscriber at once when the
+    -- pointer leaves the bar, and ~70 of them flood the Lua process until it
+    -- deadlocks with sketchybar (each waiting on the other's mach message)
+    part:subscribe("mouse.exited", hover(false))
   end
 
   numbers[i]:subscribe("mouse.clicked", function(env) on_click(env) end)

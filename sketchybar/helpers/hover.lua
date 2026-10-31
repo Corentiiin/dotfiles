@@ -8,7 +8,8 @@ return function(item, is_pinned)
       item:set({ background = { color = colors.highlight } })
     end)
   end)
-  item:subscribe({ "mouse.exited", "mouse.exited.global" }, function(_)
+  -- mouse.exited only: see the note on mouse.exited.global in items/spaces.lua
+  item:subscribe("mouse.exited", function(_)
     if is_pinned and is_pinned() then return end
     sbar.animate("tanh", 8, function()
       item:set({ background = { color = colors.transparent } })
