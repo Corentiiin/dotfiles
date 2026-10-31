@@ -5,12 +5,13 @@
 //                   (PERCENT=<0-100> CHARGING=<0|1> AC=<0|1>)
 //
 // SIGUSR1 re-sends the current battery state (used after a reload or wake).
-// The helper exits as soon as sketchybar can no longer be reached.
+// The helper exits once sketchybar can no longer be reached.
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <dispatch/dispatch.h>
+#include <errno.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdbool.h>
@@ -21,14 +22,28 @@
 
 extern char **environ;
 
-static void trigger(char *const argv[]) {
+// Returns false when sketchybar could not be reached. A single failure can be
+// transient (e.g. during a reload); only give up after several in a row, which
+// means sketchybar is gone for good.
+static int consecutive_failures = 0;
+
+static bool trigger(char *const argv[]) {
   pid_t pid;
   int status = 0;
-  if (posix_spawnp(&pid, "sketchybar", NULL, NULL, argv, environ) != 0
-      || waitpid(pid, &status, 0) < 0
-      || !WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-    exit(0);
+  int error = posix_spawnp(&pid, "sketchybar", NULL, NULL, argv, environ);
+  if (error == 0) {
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR);
   }
+
+  if (error == 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+    consecutive_failures = 0;
+    return true;
+  }
+
+  fprintf(stderr, "bar_events: '%s %s' failed (spawn error %d, status %d)\n",
+          argv[1], argv[2], error, status);
+  if (++consecutive_failures >= 3) exit(0);
+  return false;
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
@@ -90,14 +105,14 @@ static void send_battery(bool force) {
 
     // The notification also fires for time-remaining updates: skip no-ops
     if (force || percent != last_percent || charging != last_charging || ac != last_ac) {
-      last_percent = percent, last_charging = charging, last_ac = ac;
       char percent_arg[32], charging_arg[16], ac_arg[16];
       snprintf(percent_arg, sizeof(percent_arg), "PERCENT=%d", percent);
       snprintf(charging_arg, sizeof(charging_arg), "CHARGING=%d", charging);
       snprintf(ac_arg, sizeof(ac_arg), "AC=%d", ac);
       char *const argv[] = { "sketchybar", "--trigger", "battery_change",
                              percent_arg, charging_arg, ac_arg, NULL };
-      trigger(argv);
+      // Only remember what sketchybar actually received, so a failure is retried
+      if (trigger(argv)) last_percent = percent, last_charging = charging, last_ac = ac;
     }
     break;
   }

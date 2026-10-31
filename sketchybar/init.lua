@@ -13,8 +13,10 @@ sbar.end_config()
 
 -- Event provider for clock_tick / battery_change (see helpers/bar_events);
 -- restarted on every config load so a reload never leaves two instances
--- exec: the helper replaces the shell instead of keeping it around
-sbar.exec("pkill -x bar_events; exec $CONFIG_DIR/helpers/bar_events/bin/bar_events >/dev/null 2>&1")
+-- No `exec`: the shell must stay alive holding sbar.exec's output pipe; once
+-- that pipe closes, SbarLua treats the command as finished and the helper gets
+-- killed. Its stderr (failure reasons) lands in the sketchybar error log.
+sbar.exec("pkill -x bar_events; $CONFIG_DIR/helpers/bar_events/bin/bar_events >/dev/null")
 
 -- Run the event loop of the sketchybar module (without this there will be no
 -- callback functions executed in the lua module)
