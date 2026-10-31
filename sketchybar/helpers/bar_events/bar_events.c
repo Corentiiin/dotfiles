@@ -5,22 +5,72 @@
 //                   (PERCENT=<0-100> CHARGING=<0|1> AC=<0|1>)
 //
 // SIGUSR1 re-sends the current battery state (used after a reload or wake).
-// The helper exits once sketchybar can no longer be reached.
+// The helper exits once sketchybar can no longer be reached, and restarts the
+// Lua config when it stops responding (see the watchdog below).
 
 #include <CoreFoundation/CoreFoundation.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <dispatch/dispatch.h>
 #include <errno.h>
+#include <libproc.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/wait.h>
 #include <time.h>
+#include <unistd.h>
 
 extern char **environ;
+
+// Runs argv and returns its exit status (-1 if it could not run). With
+// `output`, captures up to size - 1 bytes of its stdout.
+static int run(char *const argv[], char *output, size_t size) {
+  posix_spawn_file_actions_t actions;
+  posix_spawn_file_actions_init(&actions);
+  int fds[2] = { -1, -1 };
+  if (output) {
+    output[0] = '\0';
+    if (pipe(fds) != 0) {
+      posix_spawn_file_actions_destroy(&actions);
+      return -1;
+    }
+    posix_spawn_file_actions_adddup2(&actions, fds[1], STDOUT_FILENO);
+    posix_spawn_file_actions_addclose(&actions, fds[0]);
+    posix_spawn_file_actions_addclose(&actions, fds[1]);
+  }
+
+  pid_t pid;
+  int error = posix_spawnp(&pid, argv[0], &actions, NULL, argv, environ);
+  posix_spawn_file_actions_destroy(&actions);
+
+  if (output) {
+    close(fds[1]);
+    // Read to EOF even past `size`, so the child never blocks on a full pipe
+    size_t length = 0;
+    char chunk[4096];
+    ssize_t n;
+    while ((n = read(fds[0], chunk, sizeof(chunk))) != 0) {
+      if (n < 0) {
+        if (errno == EINTR) continue;
+        break;
+      }
+      size_t take = size - 1 - length < (size_t)n ? size - 1 - length : (size_t)n;
+      memcpy(output + length, chunk, take);
+      length += take;
+    }
+    output[length] = '\0';
+    close(fds[0]);
+  }
+
+  if (error != 0) return -1;
+  int status = 0;
+  while (waitpid(pid, &status, 0) < 0 && errno == EINTR);
+  return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
 
 // Returns false when sketchybar could not be reached. A single failure can be
 // transient (e.g. during a reload); only give up after several in a row, which
@@ -28,22 +78,56 @@ extern char **environ;
 static int consecutive_failures = 0;
 
 static bool trigger(char *const argv[]) {
-  pid_t pid;
-  int status = 0;
-  int error = posix_spawnp(&pid, "sketchybar", NULL, NULL, argv, environ);
-  if (error == 0) {
-    while (waitpid(pid, &status, 0) < 0 && errno == EINTR);
-  }
-
-  if (error == 0 && WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+  int status = run(argv, NULL, 0);
+  if (status == 0) {
     consecutive_failures = 0;
     return true;
   }
 
-  fprintf(stderr, "bar_events: '%s %s' failed (spawn error %d, status %d)\n",
-          argv[1], argv[2], error, status);
+  fprintf(stderr, "bar_events: '%s %s' failed (status %d)\n", argv[1], argv[2], status);
   if (++consecutive_failures >= 3) exit(0);
   return false;
+}
+
+// ── Watchdog ─────────────────────────────────────────────────────────────────
+// SbarLua waits for sketchybar on every call, while sketchybar blocks when it
+// pushes events to Lua and Lua's queue is full. After a burst (e.g. unlocking
+// after sleep) both can end up waiting on each other and the bar freezes for
+// good. Lua handles clock_tick within milliseconds: if the clock still doesn't
+// show the new minute a few seconds later, kill the Lua config and reload it.
+// The reload starts a new instance of this helper and kills this one.
+#define WATCHDOG_DELAY 5
+
+// The config started this helper through sbar.exec: sketchybar → lua → sh
+// (running as bash) → bar_events. Kill exactly the lua ancestor, never a
+// process that merely mentions sketchybarrc on its command line.
+static void kill_lua_config(void) {
+  pid_t pid = getppid();
+  for (int depth = 0; depth < 4 && pid > 1; depth++) {
+    struct proc_bsdinfo info;
+    if (proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, &info, sizeof(info)) != sizeof(info)) break;
+    if (strcmp(info.pbi_comm, "sketchybar") == 0) break;
+    if (strcmp(info.pbi_comm, "lua") == 0) kill(pid, SIGKILL);
+    pid = info.pbi_ppid;
+  }
+}
+
+static void check_clock(time_t ticked) {
+  // Slept since the tick (the delay doesn't run during sleep): nothing to compare
+  if (time(NULL) - ticked > 30) return;
+
+  char expected[8];
+  strftime(expected, sizeof(expected), "%H:%M", localtime(&ticked));
+
+  char output[16384];
+  char *const query[] = { "sketchybar", "--query", "calendar", NULL };
+  run(query, output, sizeof(output));
+  if (strstr(output, expected)) return;
+
+  fprintf(stderr, "bar_events: clock stuck before %s, restarting the Lua config\n", expected);
+  kill_lua_config();
+  char *const reload[] = { "sketchybar", "--reload", NULL };
+  run(reload, NULL, 0);
 }
 
 // ── Clock ────────────────────────────────────────────────────────────────────
@@ -66,7 +150,11 @@ static void schedule_clock_tick(void) {
 
 static void clock_tick(void) {
   char *const argv[] = { "sketchybar", "--trigger", "clock_tick", NULL };
-  trigger(argv);
+  time_t ticked = time(NULL);
+  if (trigger(argv)) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, WATCHDOG_DELAY * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{ check_clock(ticked); });
+  }
   schedule_clock_tick();
 }
 
