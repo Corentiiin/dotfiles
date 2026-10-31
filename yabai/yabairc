@@ -2,7 +2,9 @@
 
 # ── Scripting Addition ────────────────────────────────────────────────────────
 # Reload the scripting addition whenever Dock restarts (required for some features)
-yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
+# The sudoers rule pins the binary's sha256: after every `brew upgrade yabai`, regenerate it with
+#   echo "$(whoami) ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $(which yabai) | cut -d " " -f 1) $(which yabai) --load-sa" | sudo tee /private/etc/sudoers.d/yabai
+yabai -m signal --add label=load_sa event=dock_did_restart action="sudo yabai --load-sa"
 sudo yabai --load-sa
 
 # ── Bar ───────────────────────────────────────────────────────────────────────
@@ -38,15 +40,8 @@ yabai -m config normal_window_opacity   0.95
 yabai -m config window_opacity_duration 0.0
 
 # ── Animations ────────────────────────────────────────────────────────────────
-yabai -m config window_animation_duration   0.0
-yabai -m config window_animation_frame_rate 120
-yabai -m config window_origin_display       focused
-yabai -m config window_zoom_persist         on
-
-# ── Spaces ────────────────────────────────────────────────────────────────────
-for i in $(seq 1 10); do
-    yabai -m space "$i" --label "$i"
-done
+yabai -m config window_animation_duration 0.0
+yabai -m config window_origin_display     focused
 
 # ── Float Rules ───────────────────────────────────────────────────────────────
 yabai -m rule --add app="^System Settings$"  manage=off
@@ -59,21 +54,18 @@ yabai -m rule --add app="^FaceTime$"         manage=off
 # ── Space Assignment ──────────────────────────────────────────────────────────
 yabai -m rule --add app="^Discord$" space=6
 
-# ── Multi-Display ─────────────────────────────────────────────────────────────
-yabai -m config display_arrangement_order default
-
 # ── SketchyBar Refresh Signals ────────────────────────────────────────────────
 # Claude Desktop (Electron) doesn't emit space_windows_change reliably;
 # trigger a full space refresh on window lifecycle events for that app.
 # window_moved is intentionally excluded: it fires continuously during a drag
 # and never changes which windows are visible on a space.
-yabai -m signal --add event=window_created     app="^Claude$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_destroyed   app="^Claude$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_minimized   app="^Claude$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_deminimized app="^Claude$" action="sketchybar --trigger force_space_refresh"
+# Preview/Aperçu (floating document windows) has the same problem.
+# Labels make the signals idempotent if this file is sourced again without a restart.
+for event in window_created window_destroyed window_minimized window_deminimized; do
+    yabai -m signal --add label="sketchybar_$event" event="$event" \
+        app="^(Claude|Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
+done
 
-# Preview/Aperçu (floating document windows) doesn't emit space_windows_change reliably
-yabai -m signal --add event=window_created     app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_destroyed   app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_minimized   app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
-yabai -m signal --add event=window_deminimized app="^(Preview|Aperçu)$" action="sketchybar --trigger force_space_refresh"
+# ── Apply Rules ───────────────────────────────────────────────────────────────
+# Rules only affect new windows unless applied explicitly (e.g. after a yabai restart)
+yabai -m rule --apply

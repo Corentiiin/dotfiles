@@ -8,33 +8,25 @@ local wifi = sbar.add("item", "widgets.wifi.padding", {
   label        = { drawing = false },
 })
 
-local wifi_bracket = sbar.add("bracket", "widgets.wifi.bracket", {
-  wifi.name,
-}, {
-  background = { color = colors.transparent },
-})
-
 -- ── Update ─────────────────────────────────────────────────────────────────────
 -- The Wi-Fi hardware interface (e.g. en0) essentially never changes at runtime,
 -- so it's resolved once and cached instead of being re-derived on every event.
 local iface_cache = nil
 
 local function query_ipconfig()
-  -- ipconfig getsummary is reliable on macOS 26+ (networksetup broken on Tahoe)
+  -- ipconfig getsummary is reliable on macOS 26+ (networksetup -getairportnetwork is broken on Tahoe)
   sbar.exec("ipconfig getsummary \"" .. iface_cache .. "\" 2>/dev/null", function(result)
     result = result or ""
     local ssid      = (result:match("SSID : ([^\n]+)") or ""):gsub("^%s*", ""):gsub("%s*$", "")
     local router_ip = (result:match("[Rr]outer : ([^\n]+)") or ""):gsub("^%s*", ""):gsub("%s*$", "")
+    -- macOS 26 reports "SSID : <redacted>": the name is hidden but its
+    -- presence still tells whether Wi-Fi is associated
     local connected = ssid ~= ""
 
-    local sl = ssid:lower()
-    -- Primary: iPhone hotspot = 172.20.10.0/28, Android = 192.168.43.x
-    -- Fallback: SSID keyword matching for custom names
+    -- SSID names are redacted, so hotspots are detected by router subnet:
+    -- iPhone hotspot = 172.20.10.0/28, Android = 192.168.43.x
     local is_hotspot = router_ip:match("^172%.20%.10%.")
                     or router_ip:match("^192%.168%.43%.")
-                    or sl:match("iphone") or sl:match("hotspot")
-                    or sl:match("personal") or sl:match("partage")
-                    or sl:match("ipad") or sl:match("android")
 
     local icon = connected and (is_hotspot and icons.wifi.hotspot or icons.wifi.router)
                            or icons.wifi.disconnected

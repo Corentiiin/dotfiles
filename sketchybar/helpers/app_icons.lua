@@ -171,6 +171,7 @@ return {
 	["Microsoft Remote Desktop"] = ":microsoft_remote_desktop:",
 	["Microsoft Teams"] = ":microsoft_teams:",
 	["Microsoft Teams (work or school)"] = ":microsoft_teams:",
+	["MSTeams"] = ":microsoft_teams:",
 	["Microsoft Word"] = ":microsoft_word:",
 	["Min"] = ":min_browser:",
 	["Miro"] = ":miro:",

@@ -12,6 +12,15 @@ shift + alt - j : yabai -m window --swap south
 shift + alt - k : yabai -m window --swap north
 shift + alt - l : yabai -m window --swap east
 
+# ── Window Stack ───────────────────────────────────────────────────────────────
+# Stack the focused window onto its neighbour (alt-j/k then cycle the stack);
+# toggling float twice unstacks it
+ctrl + shift + alt - h : yabai -m window --stack west
+ctrl + shift + alt - j : yabai -m window --stack south
+ctrl + shift + alt - k : yabai -m window --stack north
+ctrl + shift + alt - l : yabai -m window --stack east
+ctrl + shift + alt - u : yabai -m window --toggle float; yabai -m window --toggle float
+
 # ── Window Resize ──────────────────────────────────────────────────────────────
 ctrl + alt - h : yabai -m window --resize left:-40:0
 ctrl + alt - l : yabai -m window --resize right:40:0
@@ -23,7 +32,7 @@ shift + alt - y     : yabai -m space --mirror y-axis
 shift + alt - x     : yabai -m space --mirror x-axis
 shift + alt - b     : yabai -m space --balance
 shift + alt - space : yabai -m window --toggle float --grid 4:4:1:1:2:2
-alt   + shift - f   : yabai -m window --toggle zoom-fullscreen
+shift + alt - f     : yabai -m window --toggle zoom-fullscreen
 
 # ── Move Window to Space ───────────────────────────────────────────────────────
 shift + alt - 1     : yabai -m window --space 1
@@ -40,26 +49,29 @@ shift + alt - right : yabai -m window --space next
 shift + alt - left  : yabai -m window --space prev
 
 # ── Space Focus ────────────────────────────────────────────────────────────────
-# Pressing the same number again returns to the previous space (toggle behaviour)
-alt - 1 : yabai -m space --focus 1  || yabai -m space --focus recent
-alt - 2 : yabai -m space --focus 2  || yabai -m space --focus recent
-alt - 3 : yabai -m space --focus 3  || yabai -m space --focus recent
-alt - 4 : yabai -m space --focus 4  || yabai -m space --focus recent
-alt - 5 : yabai -m space --focus 5  || yabai -m space --focus recent
-alt - 6 : yabai -m space --focus 6  || yabai -m space --focus recent
-alt - 7 : yabai -m space --focus 7  || yabai -m space --focus recent
-alt - 8 : yabai -m space --focus 8  || yabai -m space --focus recent
-alt - 9 : yabai -m space --focus 9  || yabai -m space --focus recent
-alt - 0 : yabai -m space --focus 10 || yabai -m space --focus recent
+# Pressing the same number again returns to the previous space (toggle behaviour);
+# a missing space (e.g. 9 or 10) does nothing instead of jumping to the recent one
+alt - 1 : yabai -m space --focus 1  || { [ "$(yabai -m query --spaces --space | jq .index)" = 1 ] && yabai -m space --focus recent; }
+alt - 2 : yabai -m space --focus 2  || { [ "$(yabai -m query --spaces --space | jq .index)" = 2 ] && yabai -m space --focus recent; }
+alt - 3 : yabai -m space --focus 3  || { [ "$(yabai -m query --spaces --space | jq .index)" = 3 ] && yabai -m space --focus recent; }
+alt - 4 : yabai -m space --focus 4  || { [ "$(yabai -m query --spaces --space | jq .index)" = 4 ] && yabai -m space --focus recent; }
+alt - 5 : yabai -m space --focus 5  || { [ "$(yabai -m query --spaces --space | jq .index)" = 5 ] && yabai -m space --focus recent; }
+alt - 6 : yabai -m space --focus 6  || { [ "$(yabai -m query --spaces --space | jq .index)" = 6 ] && yabai -m space --focus recent; }
+alt - 7 : yabai -m space --focus 7  || { [ "$(yabai -m query --spaces --space | jq .index)" = 7 ] && yabai -m space --focus recent; }
+alt - 8 : yabai -m space --focus 8  || { [ "$(yabai -m query --spaces --space | jq .index)" = 8 ] && yabai -m space --focus recent; }
+alt - 9 : yabai -m space --focus 9  || { [ "$(yabai -m query --spaces --space | jq .index)" = 9 ] && yabai -m space --focus recent; }
+alt - 0 : yabai -m space --focus 10 || { [ "$(yabai -m query --spaces --space | jq .index)" = 10 ] && yabai -m space --focus recent; }
 
 # ── Space Management ───────────────────────────────────────────────────────────
 # Only spaces 9 and 10 can be destroyed; spaces 1-8 are permanent
-alt + shift - n : yabai -m space --create
-alt + shift - d : \
-    SPACE_INDEX=$(yabai -m query --spaces --space | sed -n 's/.*"index":\([0-9]*\).*/\1/p'); \
-    [ "$SPACE_INDEX" -gt 8 ] && yabai -m space --destroy
+shift + alt - n : yabai -m space --create
+shift + alt - d : [ "$(yabai -m query --spaces --space | jq .index)" -gt 8 ] && yabai -m space --destroy
 
 # ── App Launchers ──────────────────────────────────────────────────────────────
 alt - b : open -na Firefox
-alt - t : open -na Terminal
+alt - t : osascript -e 'tell application "Terminal" to do script ""' -e 'tell application "Terminal" to activate'
 alt - q : yabai -m window --close
+
+# ── Reload ─────────────────────────────────────────────────────────────────────
+# skhd restarts last: restarting it ends this command
+ctrl + shift + alt - r : yabai --restart-service; sketchybar --reload; skhd --restart-service

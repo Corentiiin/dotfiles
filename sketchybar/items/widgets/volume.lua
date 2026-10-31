@@ -1,6 +1,5 @@
 local colors      = require("colors")
 local icons       = require("icons")
-local settings    = require("settings")
 
 local popup_width = 200
 
@@ -17,6 +16,22 @@ local volume_bracket = sbar.add("bracket", "widgets.volume.bracket", {
   volume_icon.name,
 }, {
   background = { color = colors.transparent },
+})
+
+-- ── Popup Slider ───────────────────────────────────────────────────────────────
+local volume_slider = sbar.add("slider", popup_width, {
+  position = "popup." .. volume_bracket.name,
+  slider = {
+    highlight_color = colors.blue,
+    background = {
+      height        = 6,
+      corner_radius = 3,
+      color         = colors.bg2,
+    },
+    knob = { string = "􀀁", drawing = true },
+  },
+  background  = { color = colors.bg1, height = 2, y_offset = -20 },
+  click_script = 'osascript -e "set volume output volume $PERCENTAGE"',
 })
 
 -- ── Icon Helpers ───────────────────────────────────────────────────────────────
@@ -48,6 +63,7 @@ local current_volume = 0
 
 local function refresh_icon()
   volume_icon:set({ icon = { string = icon_for_device(current_device, current_volume) } })
+  volume_slider:set({ slider = { percentage = current_volume } })
 end
 
 local function refresh_device()
@@ -74,22 +90,7 @@ volume_icon:subscribe("scroll", function(env)
   sbar.exec('osascript -e "set volume output volume (output volume of (get volume settings) + ' .. delta .. ')"')
 end)
 
--- ── Popup: device picker + slider ─────────────────────────────────────────────
-sbar.add("slider", popup_width, {
-  position = "popup." .. volume_bracket.name,
-  slider = {
-    highlight_color = colors.blue,
-    background = {
-      height        = 6,
-      corner_radius = 3,
-      color         = colors.bg2,
-    },
-    knob = { string = "􀀁", drawing = true },
-  },
-  background  = { color = colors.bg1, height = 2, y_offset = -20 },
-  click_script = 'osascript -e "set volume output volume $PERCENTAGE"',
-})
-
+-- ── Popup: device picker ──────────────────────────────────────────────────────
 local function volume_collapse()
   if volume_bracket:query().popup.drawing == "off" then return end
   volume_bracket:set({ popup = { drawing = false } })
@@ -136,6 +137,7 @@ volume_icon:subscribe("mouse.exited.global", volume_collapse)
 
 -- ── Startup State ─────────────────────────────────────────────────────────────
 sbar.exec('osascript -e "output volume of (get volume settings)"', function(vol)
-  current_volume = tonumber((vol or ""):gsub("%s+", "")) or 0
+  -- Extra parentheses: gsub returns (string, count) and count would become the base
+  current_volume = tonumber((tostring(vol or ""):gsub("%s+", ""))) or 0
   refresh_device()
 end)
