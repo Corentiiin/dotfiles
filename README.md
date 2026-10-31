@@ -6,7 +6,7 @@ All my configurations for macOS
 Dependencies:
 
 ```sh
-brew install koekeishiya/formulae/yabai koekeishiya/formulae/skhd
+brew install asmvik/formulae/yabai asmvik/formulae/skhd
 brew install FelixKratz/formulae/sketchybar lua jq switchaudio-osx
 brew install --cask sf-symbols font-sf-pro font-sketchybar-app-font
 
