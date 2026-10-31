@@ -1,9 +1,10 @@
 local colors = require("colors")
 
 -- Equivalent to the --bar domain
+-- Fully transparent like the macOS 26 menu bar: items float on the wallpaper
 sbar.bar({
   height = 34,
-  color = colors.liquid_glass.clear,
-  padding_right = 6,
-  padding_left = 6,
+  color = colors.transparent,
+  padding_right = 10,
+  padding_left = 10,
 })

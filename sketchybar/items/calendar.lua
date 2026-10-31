@@ -1,61 +1,39 @@
 local settings = require("settings")
 local colors   = require("colors")
+local hover    = require("helpers.hover")
 
--- ── Calendar Item (date + time in one item) ───────────────────────────────────
+-- ── Clock (date + time in one label, macOS menu bar style) ───────────────────
 local calendar = sbar.add("item", "calendar", {
-  position = "right",
-  icon = {
-    padding_left  = 10,
-    padding_right = 0,
-    font  = {
-      family = settings.font.text,
-      style  = settings.font.style_map["Bold"],
-      size   = 13,
-    },
-    color = colors.liquid_glass.fg,
-  },
+  position      = "right",
+  padding_left  = 2,
+  padding_right = 0,
+  icon = { drawing = false },
   label = {
-    padding_left  = 8,
-    padding_right = 10,
-    font  = {
+    font = {
       family = settings.font.text,
-      style  = settings.font.style_map["Bold"],
-      size   = 13,
+      -- Semibold keeps the floating text legible on light wallpapers
+      style  = settings.font.style_map["Semibold"],
+      size   = 13.0,
     },
-    color = colors.liquid_glass.fg,
+    color         = colors.label,
+    padding_left  = 10,
+    padding_right = 10,
   },
+  background   = { drawing = true, color = colors.transparent },
   -- Short interval: routine ticks aren't aligned to the minute, so 60 s could
   -- leave the clock up to a minute behind. os.date is cheap (no process spawn).
   update_freq  = 10,
   click_script = "open -a 'Calendar'",
 })
 
--- ── Update Function ───────────────────────────────────────────────────────────
+hover(calendar)
+
 local function update_calendar()
-  calendar:set({
-    icon  = { string = (os.date("%a %b %e"):gsub("%s+", " ")) },
-    label = { string = os.date("%H:%M") },
-  })
+  -- "Sat Oct 31  15:20": Apple separates date and time with a wider gap
+  local date = os.date("%a %b %e"):gsub("%s+", " ")
+  calendar:set({ label = { string = date .. "  " .. os.date("%H:%M") } })
 end
 
 calendar:subscribe({ "forced", "routine", "system_woke" }, function(_) update_calendar() end)
-
--- ── Calendar Bracket ──────────────────────────────────────────────────────────
--- Same style as the spaces bracket on the left for visual consistency
-sbar.add("bracket", "calendar_group", { calendar.name }, {
-  background = {
-    color         = colors.with_alpha(colors.liquid_glass.tint, 0.20),
-    corner_radius = 15,
-    height        = 30,
-    border_width  = 1,
-    border_color  = colors.liquid_glass.border,
-  },
-})
-
--- Gap between calendar and system-widget bracket
-sbar.add("item", "spacer.calendar_gap", {
-  position = "right",
-  width    = 8,
-})
 
 update_calendar()

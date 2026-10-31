@@ -36,12 +36,16 @@ local icons = {
       disconnected = "􀙈",
       router = "􀙇",
       hotspot = "􀉤",
+      lock = "􀎡",
     },
     audio = {
       airpods     = "􁐘",
       airpods_pro = "􀪷",
       airpods_max = "􀺹",
       homepod     = "􀟣",
+      laptop      = "􀟛",
+      display     = "􀢹",
+      speaker     = "􀊧",
     },
     apps = {
         windows = "􂆂",

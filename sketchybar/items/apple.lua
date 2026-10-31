@@ -1,37 +1,27 @@
 local colors = require("colors")
 local icons = require("icons")
 local settings = require("settings")
+local hover = require("helpers.hover")
 
+-- The Apple logo opens the real Apple menu, like the native menu bar
 local apple = sbar.add("item", "apple_logo", {
+  padding_left  = 0,
+  padding_right = 6,
   icon = {
-    font = {
-       family = settings.font.text,
-       style = settings.font.style_map["Heavy"],
-       size = 16.0
-      },
     string = icons.apple,
-    color = colors.white,
-    padding_left = 0,
-    padding_right = 0,
-    highlight_color = colors.blue,
-  },
-  label = { 
-    string = "|",
     font = {
-       family = settings.font.text,
-       style = settings.font.style_map["Regular"],
-      },
-    drawing = true,
-    padding_left = 8,
+      family = settings.font.text,
+      style  = settings.font.style_map["Medium"],
+      size   = 16.0,
+    },
+    color         = colors.label,
+    padding_left  = 10,
+    padding_right = 10,
+    y_offset      = 1,
   },
-  background = { 
-    drawing = false,
-  },
-  width = 34,
-  padding_left = 10,
-  padding_right = 10,
-  -- no margin_right here: spacing is handled by the container
-  click_script = "$CONFIG_DIR/helpers/menus/bin/menus -s 0"
+  label      = { drawing = false },
+  background = { drawing = true, color = colors.transparent },
+  click_script = "$CONFIG_DIR/helpers/menus/bin/menus -s 0",
 })
 
--- apple_logo is included directly in the spaces bracket (see spaces.lua)
+hover(apple)

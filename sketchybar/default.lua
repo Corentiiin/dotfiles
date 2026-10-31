@@ -7,38 +7,41 @@ sbar.default({
   label = {
     font = {
       family = settings.font.text,
-      style = settings.font.style_map["Light"],
+      style = settings.font.style_map["Medium"],
       size = 13.0
     },
+    color = colors.label,
     padding_left = settings.paddings,
     padding_right = settings.paddings,
   },
   icon = {
     font = {
       family = settings.font.text,
-      style = settings.font.style_map["Semibold"],
-      size = 14.0
+      style = settings.font.style_map["Regular"],
+      size = 15.0
     },
+    color = colors.label,
     padding_left = settings.paddings,
     padding_right = settings.paddings,
-    background = { image = { corner_radius = 9 } },
   },
   background = {
-    height = 28,
-    corner_radius = 4,
+    height = 24,
+    corner_radius = 12,
     border_width = 0,
     padding_left = settings.group_paddings,
     padding_right = settings.group_paddings,
   },
+  -- macOS 26 menus: blurred material, large radius, hairline border
   popup = {
     background = {
-      border_width = 1.5,
-      corner_radius = 4,
-      border_color = colors.popup.border,
-      color = colors.popup.bg,
-      shadow = { drawing = true },
+      border_width = 1,
+      corner_radius = 14,
+      border_color = colors.menu.light.border,
+      color = colors.menu.light.bg,
+      shadow = { drawing = true, color = 0x29000000, angle = 90, distance = 3 },
     },
-    blur_radius = 40,
+    blur_radius = 50,
+    y_offset = 4,
   },
   padding_left = 5,
   padding_right = 5,

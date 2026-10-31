@@ -1,68 +1,134 @@
 local icons  = require("icons")
 local colors = require("colors")
+local hover  = require("helpers.hover")
+local Menu   = require("helpers.menu")
 
-local wifi = sbar.add("item", "widgets.wifi.padding", {
-  position     = "right",
-  padding_left = 4,   -- inter-item gap between volume and wifi
-  icon         = { padding_left = 5, padding_right = 5 },
-  label        = { drawing = false },
+-- Menu bar extra + popup modelled on the macOS 26 Wi-Fi menu:
+-- title with power toggle, current network with its details, settings link
+
+local wifi = sbar.add("item", "widgets.wifi", {
+  position      = "right",
+  padding_left  = 2,
+  padding_right = 2,
+  icon = {
+    font          = { size = 16.0 },
+    padding_left  = 9,
+    padding_right = 9,
+  },
+  label      = { drawing = false },
+  background = { drawing = true, color = colors.transparent },
 })
 
--- ── Update ─────────────────────────────────────────────────────────────────────
+local menu = Menu.new(wifi)
+hover(wifi, function() return menu.is_open end)
+
+-- ── State ─────────────────────────────────────────────────────────────────────
 -- The Wi-Fi hardware interface (e.g. en0) essentially never changes at runtime,
 -- so it's resolved once and cached instead of being re-derived on every event.
-local iface_cache = nil
+local iface = nil
+local state = { power = true, connected = false, hotspot = false }
 
-local function query_ipconfig()
-  -- ipconfig getsummary is reliable on macOS 26+ (networksetup -getairportnetwork is broken on Tahoe)
-  sbar.exec("ipconfig getsummary \"" .. iface_cache .. "\" 2>/dev/null", function(result)
-    result = result or ""
-    local ssid      = (result:match("SSID : ([^\n]+)") or ""):gsub("^%s*", ""):gsub("%s*$", "")
-    local router_ip = (result:match("[Rr]outer : ([^\n]+)") or ""):gsub("^%s*", ""):gsub("%s*$", "")
-    -- macOS 26 reports "SSID : <redacted>": the name is hidden but its
-    -- presence still tells whether Wi-Fi is associated
-    local connected = ssid ~= ""
-
-    -- SSID names are redacted, so hotspots are detected by router subnet:
-    -- iPhone hotspot = 172.20.10.0/28, Android = 192.168.43.x
-    local is_hotspot = router_ip:match("^172%.20%.10%.")
-                    or router_ip:match("^192%.168%.43%.")
-
-    local icon = connected and (is_hotspot and icons.wifi.hotspot or icons.wifi.router)
-                           or icons.wifi.disconnected
-
-    wifi:set({
-      icon = {
-        string = icon,
-        color  = connected and colors.blue or colors.white,
-        background = {
-          color         = colors.liquid_glass.selected.bg,
-          height        = 22,
-          corner_radius = 12,
-          drawing       = connected,
-        },
-      },
-    })
-  end)
+local function field(text, key)
+  return ((text:match(key .. " : ([^\n]+)") or ""):gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
-local function update_wifi()
-  if iface_cache then
-    query_ipconfig()
-    return
-  end
+local SECURITY = { WPA2_PSK = "WPA2 Personal", WPA3_SAE = "WPA3 Personal", NONE = "None" }
 
+local function read_state(callback)
+  -- ipconfig getsummary is reliable on macOS 26+ (networksetup -getairportnetwork is broken on Tahoe)
   sbar.exec(
-    "networksetup -listallhardwareports 2>/dev/null"
-    .. " | awk '/Wi-Fi/{getline; print $2; exit}'",
+    "ipconfig getsummary " .. iface .. " 2>/dev/null; echo '--'; "
+    .. "networksetup -getairportpower " .. iface .. " 2>/dev/null; ipconfig getifaddr " .. iface .. " 2>/dev/null",
     function(result)
-      iface_cache = (result or ""):gsub("%s*$", "")
-      if iface_cache == "" then iface_cache = nil; return end
-      query_ipconfig()
+      result = tostring(result or "")
+      local summary, rest = result:match("^(.-)\n%-%-\n(.*)$")
+      summary, rest = summary or "", rest or ""
+
+      local ssid = field(summary, "SSID")
+      state.power     = rest:match("Power %b(): On") ~= nil
+      -- macOS 26 reports "SSID : <redacted>": the name is hidden but its
+      -- presence still tells whether Wi-Fi is associated
+      state.connected = state.power and ssid ~= ""
+      state.ssid      = (ssid ~= "" and ssid ~= "<redacted>") and ssid or nil
+      state.router    = field(summary, "Router")
+      state.security  = field(summary, "Security")
+      state.ip        = rest:match("(%d+%.%d+%.%d+%.%d+)")
+      -- SSID names are redacted, so hotspots are detected by router subnet:
+      -- iPhone hotspot = 172.20.10.0/28, Android = 192.168.43.x
+      state.hotspot = state.router:match("^172%.20%.10%.") ~= nil
+                   or state.router:match("^192%.168%.43%.") ~= nil
+      callback()
     end
   )
 end
 
-wifi:subscribe({ "wifi_change", "system_woke", "forced" }, function(_) update_wifi() end)
+local function paint()
+  local icon = state.connected and (state.hotspot and icons.wifi.hotspot or icons.wifi.router)
+                               or icons.wifi.disconnected
+  -- Monochrome like every macOS menu bar extra; dimmed when offline
+  wifi:set({ icon = { string = icon, color = state.connected and colors.label or colors.tertiary_label } })
+end
 
-update_wifi()
+local function update()
+  if iface then
+    read_state(function() paint(); menu:refresh() end)
+    return
+  end
+  sbar.exec("networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi/{getline; print $2; exit}'", function(result)
+    iface = tostring(result or ""):gsub("%s+$", "")
+    if iface == "" then iface = nil; return end
+    update()
+  end)
+end
+
+-- ── Popup ─────────────────────────────────────────────────────────────────────
+local function build(m)
+  m:title("Wi-Fi", {
+    on = state.power,
+    on_click = function(_)
+      sbar.exec("networksetup -setairportpower " .. iface .. (state.power and " off" or " on"), function(_)
+        update()
+      end)
+    end,
+  })
+
+  if state.power then
+    m:separator()
+    if state.connected then
+      m:header(state.hotspot and "Personal Hotspot" or "Known Network")
+      m:circle_row(state.ssid or "Connected", state.hotspot and icons.wifi.hotspot or icons.wifi.router, true)
+      if state.ip then m:detail("IP Address", state.ip) end
+      if state.router ~= "" then m:detail("Router", state.router) end
+      if state.security ~= "" then m:detail("Security", SECURITY[state.security] or state.security:gsub("_", " ")) end
+    else
+      m:info("Not connected")
+    end
+  end
+
+  m:separator()
+  m:action("Wi-Fi Settings…", function(_)
+    menu:close()
+    sbar.exec("open 'x-apple.systempreferences:com.apple.wifi-settings-extension'")
+  end)
+end
+
+local function close_menu()
+  menu:close()
+  wifi:set({ background = { color = colors.transparent } })
+end
+
+wifi:subscribe("mouse.clicked", function(_)
+  if menu.is_open then close_menu(); return end
+  if not iface then return end
+  -- Fresh state first so the menu opens with current details
+  read_state(function()
+    paint()
+    menu:open(build)
+    wifi:set({ background = { color = colors.highlight } })
+  end)
+end)
+
+wifi:subscribe("mouse.exited.global", close_menu)
+wifi:subscribe({ "wifi_change", "system_woke", "forced" }, function(_) update() end)
+
+update()

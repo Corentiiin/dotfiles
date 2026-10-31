@@ -1,40 +1,29 @@
-local colors      = require("colors")
-local icons       = require("icons")
+local colors = require("colors")
+local icons  = require("icons")
+local hover  = require("helpers.hover")
+local Menu   = require("helpers.menu")
 
-local popup_width = 200
+-- Menu bar extra + popup modelled on the macOS 26 Sound menu:
+-- title, volume slider, "Output" section with round device buttons, settings link
 
-local volume_icon = sbar.add("item", "widgets.volume1", {
-  position     = "right",
-  padding_left = 10,  -- left margin inside the sys_status bracket (matches spaces outer padding)
+local volume = sbar.add("item", "widgets.volume", {
+  position      = "right",
+  padding_left  = 2,
+  padding_right = 2,
   icon = {
     string        = icons.volume._100,
-    padding_right = 6,
+    font          = { size = 15.0 },
+    padding_left  = 9,
+    padding_right = 9,
   },
+  label      = { drawing = false },
+  background = { drawing = true, color = colors.transparent },
 })
 
-local volume_bracket = sbar.add("bracket", "widgets.volume.bracket", {
-  volume_icon.name,
-}, {
-  background = { color = colors.transparent },
-})
+local menu = Menu.new(volume)
+hover(volume, function() return menu.is_open end)
 
--- ── Popup Slider ───────────────────────────────────────────────────────────────
-local volume_slider = sbar.add("slider", popup_width, {
-  position = "popup." .. volume_bracket.name,
-  slider = {
-    highlight_color = colors.blue,
-    background = {
-      height        = 6,
-      corner_radius = 3,
-      color         = colors.bg2,
-    },
-    knob = { string = "􀀁", drawing = true },
-  },
-  background  = { color = colors.bg1, height = 2, y_offset = -20 },
-  click_script = 'osascript -e "set volume output volume $PERCENTAGE"',
-})
-
--- ── Icon Helpers ───────────────────────────────────────────────────────────────
+-- ── Icon Helpers ──────────────────────────────────────────────────────────────
 local function icon_for_volume(v)
   if     v > 75 then return icons.volume._100
   elseif v > 35 then return icons.volume._66
@@ -45,7 +34,7 @@ local function icon_for_volume(v)
 end
 
 -- Map output device name to SF Symbol icon; fall back to volume-level icon
-local function icon_for_device(device, volume)
+local function icon_for_device(device, level)
   local d = (device or ""):lower()
   if     d:match("airpods pro")  then return icons.audio.airpods_pro
   elseif d:match("airpods max")  then return icons.audio.airpods_max
@@ -53,87 +42,111 @@ local function icon_for_device(device, volume)
   elseif d:match("homepod")
       or d:match("hifi")
       or d:match("studio display") then return icons.audio.homepod
-  else   return icon_for_volume(volume)
+  else   return icon_for_volume(level)
   end
 end
 
--- ── Device Tracking ───────────────────────────────────────────────────────────
+-- Glyph inside the round device button of the popup
+local function glyph_for_device(device)
+  local d = (device or ""):lower()
+  if     d:match("airpods pro") then return icons.audio.airpods_pro
+  elseif d:match("airpods max") then return icons.audio.airpods_max
+  elseif d:match("airpods")     then return icons.audio.airpods
+  elseif d:match("homepod")     then return icons.audio.homepod
+  elseif d:match("macbook")     then return icons.audio.laptop
+  elseif d:match("display") or d:match("monitor") then return icons.audio.display
+  else                               return icons.audio.speaker
+  end
+end
+
+-- ── State ─────────────────────────────────────────────────────────────────────
 local current_device = ""
 local current_volume = 0
+local devices        = {}
+local slider         = nil -- popup slider while the menu is open
+
+local function trim(s) return (tostring(s or ""):gsub("^%s+", ""):gsub("%s+$", "")) end
 
 local function refresh_icon()
-  volume_icon:set({ icon = { string = icon_for_device(current_device, current_volume) } })
-  volume_slider:set({ slider = { percentage = current_volume } })
+  volume:set({ icon = { string = icon_for_device(current_device, current_volume) } })
 end
 
 local function refresh_device()
   sbar.exec("SwitchAudioSource -t output -c 2>/dev/null", function(result)
-    current_device = result:gsub("%s+$", ""):gsub("^%s+", "")
+    current_device = trim(result)
     refresh_icon()
   end)
 end
 
+-- ── Popup ─────────────────────────────────────────────────────────────────────
+local function build(m)
+  m:title("Sound")
+  slider = m:slider(current_volume, 'osascript -e "set volume output volume $PERCENTAGE"')
+  m:separator()
+  m:header("Output")
+  for _, device in ipairs(devices) do
+    m:circle_row(device, glyph_for_device(device), device == current_device, function(_)
+      sbar.exec('SwitchAudioSource -s "' .. device:gsub('"', '\\"') .. '"', function(_)
+        current_device = device
+        refresh_icon()
+        menu:refresh()
+      end)
+    end)
+  end
+  m:separator()
+  m:action("Sound Settings…", function(_)
+    menu:close()
+    sbar.exec("open 'x-apple.systempreferences:com.apple.Sound-Settings.extension'")
+  end)
+end
+
+local function open_menu()
+  -- Load the device list first so the menu opens complete
+  sbar.exec("SwitchAudioSource -t output -c 2>/dev/null; echo '--'; SwitchAudioSource -a -t output 2>/dev/null", function(result)
+    local current, list = tostring(result or ""):match("^(.-)\n%-%-\n(.*)$")
+    current_device = trim(current)
+    devices = {}
+    for device in (list or ""):gmatch("[^\r\n]+") do table.insert(devices, device) end
+    refresh_icon()
+    menu:open(build)
+    volume:set({ background = { color = colors.highlight } })
+  end)
+end
+
+local function close_menu()
+  menu:close()
+  volume:set({ background = { color = colors.transparent } })
+end
+
+volume:subscribe("mouse.clicked", function(env)
+  if env.BUTTON == "right" then
+    sbar.exec("open 'x-apple.systempreferences:com.apple.Sound-Settings.extension'")
+  elseif menu.is_open then
+    close_menu()
+  else
+    open_menu()
+  end
+end)
+
+volume:subscribe("mouse.exited.global", close_menu)
+
 -- ── Live Updates ──────────────────────────────────────────────────────────────
-volume_icon:subscribe("volume_change", function(env)
+volume:subscribe("volume_change", function(env)
   current_volume = tonumber(env.INFO) or 0
+  if menu.is_open and slider then slider:set({ slider = { percentage = current_volume } }) end
   refresh_device()  -- also re-check device on each volume event
 end)
 
-volume_icon:subscribe("system_woke", function(_)
+volume:subscribe("system_woke", function(_)
   refresh_device()
 end)
 
 -- Scroll on the icon adjusts system volume (ctrl = fine, no modifier = coarse)
-volume_icon:subscribe("scroll", function(env)
+volume:subscribe("mouse.scrolled", function(env)
   local delta = env.INFO.delta
   if not (env.INFO.modifier == "ctrl") then delta = delta * 10.0 end
   sbar.exec('osascript -e "set volume output volume (output volume of (get volume settings) + ' .. delta .. ')"')
 end)
-
--- ── Popup: device picker ──────────────────────────────────────────────────────
-local function volume_collapse()
-  if volume_bracket:query().popup.drawing == "off" then return end
-  volume_bracket:set({ popup = { drawing = false } })
-  volume_icon:set({ background = { color = colors.transparent } })
-  sbar.remove('/volume.device\\.*/')
-end
-
-local function volume_toggle(env)
-  if env.BUTTON == "right" then
-    sbar.exec("open /System/Library/PreferencePanes/Sound.prefpane")
-    return
-  end
-
-  if volume_bracket:query().popup.drawing == "off" then
-    volume_bracket:set({ popup = { drawing = true } })
-    volume_icon:set({ background = { color = colors.selected_bg } })
-    sbar.exec("SwitchAudioSource -t output -c 2>/dev/null", function(result)
-      current_device = result:gsub("%s+$", ""):gsub("^%s+", "")
-      refresh_icon()
-      sbar.exec("SwitchAudioSource -a -t output 2>/dev/null", function(available)
-        local counter = 0
-        for device in available:gmatch("[^\r\n]+") do
-          local color = (device == current_device) and colors.white or colors.grey
-          sbar.add("item", "volume.device." .. counter, {
-            position = "popup." .. volume_bracket.name,
-            width    = popup_width,
-            align    = "center",
-            label    = { string = device, color = color },
-            click_script = 'SwitchAudioSource -s "' .. device .. '"'
-              .. ' && sketchybar --set /volume.device\\.*/ label.color=' .. colors.grey
-              .. ' --set $NAME label.color=' .. colors.white,
-          })
-          counter = counter + 1
-        end
-      end)
-    end)
-  else
-    volume_collapse()
-  end
-end
-
-volume_icon:subscribe("mouse.clicked",       volume_toggle)
-volume_icon:subscribe("mouse.exited.global", volume_collapse)
 
 -- ── Startup State ─────────────────────────────────────────────────────────────
 sbar.exec('osascript -e "output volume of (get volume settings)"', function(vol)
