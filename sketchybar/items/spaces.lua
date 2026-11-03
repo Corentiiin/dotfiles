@@ -235,9 +235,13 @@ local function refresh()
 
     for _, w in ipairs(windows) do
       local apps = by_space[w.space]
+      -- Some apps (Claude Desktop) only order their window out when it is
+      -- closed: yabai drops it, but still lists it from the window server with
+      -- no accessibility reference and not visible
+      local closed = not w["has-ax-reference"] and not w["is-visible"]
       -- Hidden/minimized windows aren't on screen; indices beyond MAX_SPACES are
       -- native fullscreen spaces or extra displays
-      if apps and not w["is-minimized"] and not w["is-hidden"] then
+      if apps and not closed and not w["is-minimized"] and not w["is-hidden"] then
         apps[w.app] = apps[w.app] or { name = w.app, pid = w.pid, window = w.id }
       end
     end
