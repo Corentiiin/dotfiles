@@ -71,3 +71,8 @@ done
 # ── Apply Rules ───────────────────────────────────────────────────────────────
 # Rules only affect new windows unless applied explicitly (e.g. after a yabai restart)
 yabai -m rule --apply
+
+# ── Initial Bar Refresh ───────────────────────────────────────────────────────
+# At login sketchybar usually starts before yabai can answer, so its first
+# query finds nothing: fill in the space icons as soon as yabai is ready
+sketchybar --trigger force_space_refresh 2>/dev/null
