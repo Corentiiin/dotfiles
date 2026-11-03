@@ -19,7 +19,10 @@ local INSET  = 6                   -- hover highlight inset from the popup edge
 local TEXT   = 14                  -- text inset from the popup edge
 local ROW    = M.WIDTH - 2 * INSET -- width of a full row
 local CIRCLE = 26
-local TOGGLE_W, TOGGLE_H = 34, 20
+-- macOS 26 toggle, drawn by assets/make_toggles.py (a glyph knob can't be
+-- centered reliably: SF Symbols sit on the text baseline)
+local TOGGLE_W = 54
+local TOGGLE_IMAGE = os.getenv("CONFIG_DIR") .. "/assets/toggle_%s_%s.png"
 local KNOB = "􀀁"
 
 local function font(style, size)
@@ -32,8 +35,8 @@ Menu.__index = Menu
 function M.new(parent)
   -- A tiny minimum cell lets every row define its own height
   parent:set({ popup = { align = "right", height = 4 } })
-  return setmetatable({ parent = parent, parts = {}, palette = colors.menu.light, is_open = false,
-                        generation = 0 }, Menu)
+  return setmetatable({ parent = parent, parts = {}, palette = colors.menu.light, appearance = "light",
+                        is_open = false, generation = 0 }, Menu)
 end
 
 -- ── Lifecycle ─────────────────────────────────────────────────────────────────
@@ -67,7 +70,8 @@ function Menu:open(builder)
   self.builder = builder
   sbar.exec("defaults read -g AppleInterfaceStyle 2>/dev/null", function(result)
     if not self.is_open then return end
-    self.palette = tostring(result or ""):find("Dark") and colors.menu.dark or colors.menu.light
+    self.appearance = tostring(result or ""):find("Dark") and "dark" or "light"
+    self.palette = colors.menu[self.appearance]
     self:build()
     self.parent:set({ popup = { drawing = true } })
   end)
@@ -122,18 +126,17 @@ function Menu:title(text, toggle)
     props.icon.width = ROW - TOGGLE_W - (TEXT - INSET)
     props.label = {
       drawing       = true,
-      string        = KNOB,
-      font          = { family = settings.font.text, style = settings.font.style_map["Regular"], size = 15.0 },
-      color         = 0xffffffff,
+      string        = "",
       width         = TOGGLE_W,
-      align         = toggle.on and "right" or "left",
-      padding_left  = 2,
-      padding_right = 2,
+      padding_left  = 0,
+      padding_right = 0,
       background = {
-        drawing       = true,
-        color         = toggle.on and colors.blue or p.toggle_off,
-        height        = TOGGLE_H,
-        corner_radius = TOGGLE_H / 2,
+        drawing = true,
+        color   = colors.transparent,
+        image   = {
+          string = TOGGLE_IMAGE:format(toggle.on and "on" or "off", self.appearance),
+          scale  = 0.5,
+        },
       },
     }
   end
@@ -153,7 +156,7 @@ function Menu:header(text)
       color        = self.palette.secondary,
       padding_left = TEXT - INSET,
     },
-    background = { drawing = true, color = colors.transparent, height = 26 },
+    background = { drawing = true, color = colors.transparent, height = 24 },
   })
 end
 
@@ -172,16 +175,19 @@ function Menu:info(text)
   })
 end
 
--- Key/value detail line, like the option-click details of the Wi-Fi menu
+-- Key/value detail line, like the option-click details of the Wi-Fi menu:
+-- indented under the name of the circle row above it (a fixed width counts
+-- the left padding too)
 function Menu:detail(key, value)
+  local indent = TEXT - INSET + CIRCLE + 8
   return self:add({
     width = ROW, padding_left = INSET, padding_right = INSET,
     icon = {
       string       = key,
       font         = font("Regular", 12.0),
       color        = self.palette.secondary,
-      width        = 96,
-      padding_left = TEXT - INSET,
+      width        = indent + 80,
+      padding_left = indent,
     },
     label = {
       string = value,
@@ -209,7 +215,7 @@ end
 -- Row with a round icon; the active one is filled with the accent color
 function Menu:circle_row(text, glyph, active, callback)
   local p = self.palette
-  local circle = active and colors.blue or p.circle
+  local circle = active and p.accent or p.circle
   local item = self:add({
     width = ROW - (TEXT - INSET), padding_left = TEXT, padding_right = INSET,
     icon = {
@@ -226,9 +232,9 @@ function Menu:circle_row(text, glyph, active, callback)
       string       = text,
       font         = font("Regular", 13.0),
       color        = p.label,
-      padding_left = 10,
+      padding_left = 8,
     },
-    background = { drawing = true, color = colors.transparent, height = 34 },
+    background = { drawing = true, color = colors.transparent, height = 32 },
   })
 
   if not active then
@@ -255,7 +261,7 @@ function Menu:action(text, callback)
       color        = p.label,
       padding_left = TEXT - INSET,
     },
-    background = { drawing = true, color = colors.transparent, height = 26, corner_radius = 8 },
+    background = { drawing = true, color = colors.transparent, height = 24, corner_radius = 8 },
   })
   self:on(item, "mouse.entered", function(_) item:set({ background = { color = p.hover } }) end)
   self:on(item, "mouse.exited", function(_) item:set({ background = { color = colors.transparent } }) end)
@@ -274,7 +280,7 @@ function Menu:slider(percentage, click_script)
     label = { drawing = false },
     slider = {
       percentage      = percentage,
-      highlight_color = colors.blue,
+      highlight_color = self.palette.accent,
       background = { height = 5, corner_radius = 2.5, color = self.palette.track },
       knob = {
         string  = KNOB,

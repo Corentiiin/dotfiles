@@ -45,7 +45,7 @@ return {
       circle       = 0x14000000,
       circle_hover = 0x24000000,
       track        = 0x1f000000,
-      toggle_off   = 0x33787880,
+      accent       = 0xff007aff, -- systemBlue, light appearance
     },
     dark = {
       bg           = 0xe62a2a2c,
@@ -57,7 +57,7 @@ return {
       circle       = 0x29ffffff,
       circle_hover = 0x3dffffff,
       track        = 0x33ffffff,
-      toggle_off   = 0x5c787880,
+      accent       = 0xff0a84ff, -- systemBlue, dark appearance
     },
   },
 
