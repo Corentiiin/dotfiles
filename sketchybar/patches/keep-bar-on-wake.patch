@@ -1,0 +1,57 @@
+sketchybar rebuilds every bar and item window on wake and on screen unlock
+(com.apple.screenIsUnlocked is handled as a wake), so the whole bar visibly
+disappears and comes back. Only rebuild when the display layout changed;
+otherwise keep the bar and just send system_woke so the config can refresh.
+
+--- a/src/bar_manager.c
++++ b/src/bar_manager.c
+@@ -13,6 +13,24 @@
+
+ extern void forced_front_app_event();
+
++// Fingerprint of the display layout (ids and frames) the bars were built for
++static uint64_t g_display_layout = 0;
++
++static uint64_t display_layout_fingerprint(void) {
++  uint32_t count = 0;
++  CGDirectDisplayID displays[32];
++  if (CGGetActiveDisplayList(32, displays, &count) != kCGErrorSuccess) return 0;
++
++  uint64_t hash = 1469598103934665603ULL ^ CGMainDisplayID();
++  for (uint32_t i = 0; i < count; i++) {
++    CGRect frame = CGDisplayBounds(displays[i]);
++    int64_t values[] = { displays[i], frame.origin.x, frame.origin.y,
++                         frame.size.width, frame.size.height };
++    for (int j = 0; j < 5; j++) hash = (hash ^ (uint64_t)values[j]) * 1099511628211ULL;
++  }
++  return hash;
++}
++
+ static CLOCK_CALLBACK(clock_handler) {
+   struct event event = { NULL, SHELL_REFRESH };
+   event_post(&event);
+@@ -585,6 +603,7 @@
+ }
+
+ void bar_manager_begin(struct bar_manager* bar_manager) {
++  g_display_layout = display_layout_fingerprint();
+   if (bar_manager->displays == DISPLAY_MAIN_PATTERN) {
+     uint32_t did = display_main_display_id();
+     bar_manager->bar_count = 1;
+@@ -1039,7 +1058,15 @@
+     });
+   }
+
+-  bar_manager_display_changed(bar_manager);
++  // Waking up or unlocking the screen used to destroy and recreate every bar
++  // and item window, which shows as the whole bar flickering back in. Only
++  // rebuild when the display layout really changed; otherwise the bar is still
++  // valid and the system_woke event lets the config refresh what changed.
++  if (display_layout_fingerprint() != g_display_layout) {
++    bar_manager_display_changed(bar_manager);
++  } else {
++    bar_manager_refresh(bar_manager, false);
++  }
+   bar_manager_custom_events_trigger(bar_manager,
+                                     COMMAND_SUBSCRIBE_SYSTEM_WOKE,
+                                     NULL                          );

@@ -107,6 +107,12 @@ brew install --cask sf-symbols font-sf-pro font-sketchybar-app-font
 
 Les deux petits programmes de sketchybar (`menus` pour les menus Apple et des apps, `bar_events` pour l'horloge et la batterie) sont compilés au démarrage. Il faut donc les Xcode Command Line Tools.
 
+sketchybar est recompilé avec un correctif (`sketchybar/patches/`) : sans lui, il détruit et recrée toute la barre à chaque sortie de veille et à chaque déverrouillage. Le script recompile la version installée par Homebrew et la remplace. Il est à relancer après chaque `brew upgrade sketchybar` (annulation : `brew reinstall sketchybar`) :
+
+```sh
+~/.config/sketchybar/patches/install.sh
+```
+
 Le scripting addition de yabai demande de désactiver SIP en partie, et une règle sudoers liée au sha256 du binaire. Elle est à régénérer après chaque `brew upgrade yabai` :
 
 ```sh
