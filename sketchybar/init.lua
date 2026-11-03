@@ -16,7 +16,12 @@ sbar.end_config()
 -- No `exec`: the shell must stay alive holding sbar.exec's output pipe; once
 -- that pipe closes, SbarLua treats the command as finished and the helper gets
 -- killed. Its stderr (failure reasons) lands in the sketchybar error log.
-sbar.exec("pkill -x bar_events; $CONFIG_DIR/helpers/bar_events/bin/bar_events >/dev/null")
+-- It also ends any older config instance: one that missed its reload (e.g.
+-- the Mac fell asleep mid-reload) otherwise lingers forever. In this shell
+-- $PPID is this Lua process, and its parent is sketchybar.
+sbar.exec("pkill -x bar_events; "
+  .. "for pid in $(pgrep -x -P $(ps -o ppid= -p $PPID) lua); do [ $pid = $PPID ] || kill -9 $pid; done; "
+  .. "$CONFIG_DIR/helpers/bar_events/bin/bar_events >/dev/null")
 
 -- Run the event loop of the sketchybar module (without this there will be no
 -- callback functions executed in the lua module)

@@ -9,6 +9,7 @@
 // Lua config when it stops responding (see the watchdog below).
 
 #include <CoreFoundation/CoreFoundation.h>
+#include <CoreGraphics/CoreGraphics.h>
 #include <IOKit/ps/IOPowerSources.h>
 #include <IOKit/ps/IOPSKeys.h>
 #include <dispatch/dispatch.h>
@@ -96,7 +97,13 @@ static bool trigger(char *const argv[]) {
 // good. Lua handles clock_tick within milliseconds: if the clock still doesn't
 // show the new minute a few seconds later, kill the Lua config and reload it.
 // The reload starts a new instance of this helper and kills this one.
-#define WATCHDOG_DELAY 5
+//
+// Only while the display is on: during a DarkWake (maintenance wake with the
+// display off) the GUI barely runs, the clock lags behind, and a reload there
+// gets cut off by the next sleep and leaves the bar half-built at unlock.
+// A second look 10 s later rules out a merely slow wake.
+#define WATCHDOG_DELAY  5
+#define WATCHDOG_RETRY 10
 
 // The config started this helper through sbar.exec: sketchybar → lua → sh
 // (running as bash) → bar_events. Kill exactly the lua ancestor, never a
@@ -112,9 +119,10 @@ static void kill_lua_config(void) {
   }
 }
 
-static void check_clock(time_t ticked) {
+static void check_clock(time_t ticked, bool retry) {
   // Slept since the tick (the delay doesn't run during sleep): nothing to compare
   if (time(NULL) - ticked > 30) return;
+  if (CGDisplayIsAsleep(CGMainDisplayID())) return;
 
   char expected[8];
   strftime(expected, sizeof(expected), "%H:%M", localtime(&ticked));
@@ -123,6 +131,12 @@ static void check_clock(time_t ticked) {
   char *const query[] = { "sketchybar", "--query", "calendar", NULL };
   run(query, output, sizeof(output));
   if (strstr(output, expected)) return;
+
+  if (!retry) {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, WATCHDOG_RETRY * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{ check_clock(ticked, true); });
+    return;
+  }
 
   fprintf(stderr, "bar_events: clock stuck before %s, restarting the Lua config\n", expected);
   kill_lua_config();
@@ -153,7 +167,7 @@ static void clock_tick(void) {
   time_t ticked = time(NULL);
   if (trigger(argv)) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, WATCHDOG_DELAY * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{ check_clock(ticked); });
+                   dispatch_get_main_queue(), ^{ check_clock(ticked, false); });
   }
   schedule_clock_tick();
 }
