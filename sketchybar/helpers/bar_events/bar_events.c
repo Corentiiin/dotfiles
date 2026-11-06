@@ -98,9 +98,11 @@ static bool trigger(char *const argv[]) {
 // show the new minute a few seconds later, kill the Lua config and reload it.
 // The reload starts a new instance of this helper and kills this one.
 //
-// Only while the display is on: during a DarkWake (maintenance wake with the
-// display off) the GUI barely runs, the clock lags behind, and a reload there
-// gets cut off by the next sleep and leaves the bar half-built at unlock.
+// Only while the display is on and the screen unlocked: during a DarkWake
+// (maintenance wake with the display off) or behind the lock screen the GUI
+// barely runs and the clock lags behind. Reloading there every minute stacks
+// up configs that can't finish starting, and the bar is left half-built at
+// unlock.
 // A second look 10 s later rules out a merely slow wake.
 #define WATCHDOG_DELAY  5
 #define WATCHDOG_RETRY 10
@@ -119,10 +121,19 @@ static void kill_lua_config(void) {
   }
 }
 
+static bool screen_is_locked(void) {
+  CFDictionaryRef session = CGSessionCopyCurrentDictionary();
+  if (!session) return false;
+  CFBooleanRef locked = CFDictionaryGetValue(session, CFSTR("CGSSessionScreenIsLocked"));
+  bool result = locked && CFBooleanGetValue(locked);
+  CFRelease(session);
+  return result;
+}
+
 static void check_clock(time_t ticked, bool retry) {
   // Slept since the tick (the delay doesn't run during sleep): nothing to compare
   if (time(NULL) - ticked > 30) return;
-  if (CGDisplayIsAsleep(CGMainDisplayID())) return;
+  if (CGDisplayIsAsleep(CGMainDisplayID()) || screen_is_locked()) return;
 
   char expected[8];
   strftime(expected, sizeof(expected), "%H:%M", localtime(&ticked));
