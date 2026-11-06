@@ -54,6 +54,17 @@ yabai -m rule --add app="^FaceTime$"         manage=off
 # ── Space Assignment ──────────────────────────────────────────────────────────
 yabai -m rule --add app="^Discord$" space=6
 
+# ── Second Display ────────────────────────────────────────────────────────────
+# Spaces 9 and 10 (alt-9 / alt-0) live on the second display, created as soon
+# as it is plugged in. macOS rearranges spaces right after the display shows
+# up, hence the short delay.
+yabai -m signal --add label=arrange_spaces event=display_added \
+    action="sleep 1; $HOME/.config/yabai/arrange_spaces.sh"
+"$HOME/.config/yabai/arrange_spaces.sh"
+
+# Pointer helper used by focus_space.sh (alt-<n>)
+make -C "$HOME/.config/yabai/helpers" >/dev/null
+
 # ── SketchyBar Refresh Signals ────────────────────────────────────────────────
 # sketchybar's own space_windows_change fires before yabai has updated its
 # window list (e.g. an app that just quit is still listed), and some apps

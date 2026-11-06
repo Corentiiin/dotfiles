@@ -23,10 +23,11 @@ Un environnement de bureau en mosaïque pour macOS 26 (Tahoe), sur Apple Silicon
 - **Apps flottantes** (hors mosaïque) : Réglages Système, Calculette, Moniteur d'activité, Finder, QuickTime Player, FaceTime.
 - **Discord** s'ouvre toujours sur l'espace 6.
 - **Espaces** : les espaces 1 à 8 sont permanents. On peut en créer deux de plus (9 et 10, gérés par la barre et les raccourcis), et seuls ceux-là peuvent être supprimés.
+- **Deuxième écran** : dès qu'il est branché, les espaces 9 et 10 y sont créés (ou y sont déplacés s'ils existaient déjà sur l'écran principal). Les espaces 1 à 8 restent sur l'écran principal.
 
 #### Barre (sketchybar)
 
-La barre est transparente, comme la barre de menus de macOS 26. Ses éléments flottent sur le fond d'écran.
+La barre est transparente, comme la barre de menus de macOS 26. Ses éléments flottent sur le fond d'écran. Avec deux écrans, chaque barre n'affiche que les espaces de son écran.
 
 De gauche à droite :
 
@@ -78,7 +79,7 @@ Avec la souris, en maintenant `⌥` :
 
 | Raccourci | Action |
 |---|---|
-| `⌥ 1` … `⌥ 9`, `⌥ 0` | Va sur l'espace 1 à 10. Rappuyer sur le même chiffre revient à l'espace précédent. |
+| `⌥ 1` … `⌥ 9`, `⌥ 0` | Va sur l'espace 1 à 10. Rappuyer sur le même chiffre revient à l'espace précédent. Si l'espace est sur l'autre écran que la souris, la souris y va aussi (sur la fenêtre active, sinon au centre de l'écran) ; sur le même écran, elle ne bouge pas. |
 | `⇧ ⌥ 1` … `⇧ ⌥ 0` | Envoie la fenêtre sur l'espace 1 à 10 |
 | `⇧ ⌥ →` / `⇧ ⌥ ←` | Envoie la fenêtre sur l'espace suivant / précédent |
 | `⇧ ⌥ N` | Crée un espace |
@@ -120,6 +121,8 @@ echo "$(whoami) ALL=(root) NOPASSWD: sha256:$(shasum -a 256 $(which yabai) | cut
 ```
 
 Après une mise à jour, yabai doit aussi être autorisé de nouveau dans Réglages Système → Confidentialité et sécurité → Accessibilité.
+
+Avec un deuxième écran, il faut régler Réglages Système → Bureau et Dock → « Cliquer sur le fond d'écran pour afficher le bureau » sur « Uniquement dans Stage Manager ». Pour activer un écran sans fenêtre, yabai clique au centre du fond d'écran : avec le réglage par défaut, ce clic écarte toutes les fenêtres, et yabai refuse ensuite tout changement d'espace tant qu'on n'a pas recliqué sur le fond d'écran.
 
 ### Compatibilité
 

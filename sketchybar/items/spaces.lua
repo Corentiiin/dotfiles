@@ -151,11 +151,17 @@ local function render(i)
   local shown = math.min(#apps, MAX_ICONS)
   local extra = #apps - shown
 
-  local signature = {}
+  local signature = { tostring(s.display) }
   for _, app in ipairs(apps) do table.insert(signature, app.name .. "=" .. tostring(bundle_ids[app.name])) end
   signature = table.concat(signature, ",")
   if signature == s.signature then return end
   s.signature = signature
+
+  -- The space number only shows on its own display; the icons must follow it
+  -- or every display would show the icons of every space
+  local display = s.display or "all"
+  for j = 1, MAX_ICONS do app_slots[i][j]:set({ display = display }) end
+  overflow[i]:set({ display = display })
 
   numbers[i]:set({ icon = { padding_right = (#apps > 0) and 5 or EDGE } })
 
@@ -230,10 +236,12 @@ local function refresh()
     if generation ~= refresh_generation then return end
     if type(windows) ~= "table" then return end
 
-    local by_space = {}
+    local by_space   = {}
+    local display_of = {} -- space index -> yabai display index (= sketchybar's)
     for i = 1, MAX_SPACES do by_space[i] = {} end
 
     for _, w in ipairs(windows) do
+      display_of[w.space] = w.display
       local apps = by_space[w.space]
       -- Some apps (Claude Desktop) only order their window out when it is
       -- closed: yabai drops it, but still lists it from the window server with
@@ -251,6 +259,7 @@ local function refresh()
       for _, app in pairs(by_space[i]) do table.insert(list, app) end
       table.sort(list, function(a, b) return a.name:lower() < b.name:lower() end)
       state[i].apps = list
+      state[i].display = display_of[i]
       for _, app in ipairs(list) do resolve_bundle(app) end
       render(i)
     end
