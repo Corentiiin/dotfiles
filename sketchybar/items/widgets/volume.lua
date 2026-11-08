@@ -71,8 +71,16 @@ local function refresh_icon()
   volume:set({ icon = { string = icon_for_device(current_device, current_volume) } })
 end
 
+-- volume_change also fires when the output device changes, so each one
+-- re-reads the device; one lookup at a time, a burst folds into one more
+local device_busy, device_again = false, false
+
 local function refresh_device()
+  if device_busy then device_again = true; return end
+  device_busy, device_again = true, false
   sbar.exec("SwitchAudioSource -t output -c 2>/dev/null", function(result)
+    device_busy = false
+    if device_again then return refresh_device() end
     current_device = trim(result)
     refresh_icon()
   end)
@@ -142,14 +150,30 @@ volume:subscribe("system_woke", function(_)
 end)
 
 -- Scroll on the icon adjusts system volume (ctrl = fine, no modifier = coarse)
+-- Every wheel step is an event: steps arriving while osascript (costly to
+-- start) still runs are added up and applied by a single next call
+local scroll_delta, scroll_busy = 0, false
+
+local function apply_scroll()
+  if scroll_busy or scroll_delta == 0 then return end
+  local delta = scroll_delta
+  scroll_delta, scroll_busy = 0, true
+  sbar.exec('osascript -e "set volume output volume (output volume of (get volume settings) + ' .. delta .. ')"', function(_)
+    scroll_busy = false
+    apply_scroll()
+  end)
+end
+
 volume:subscribe("mouse.scrolled", function(env)
   local delta = env.INFO.delta
   if not (env.INFO.modifier == "ctrl") then delta = delta * 10.0 end
-  sbar.exec('osascript -e "set volume output volume (output volume of (get volume settings) + ' .. delta .. ')"')
+  scroll_delta = scroll_delta + delta
+  apply_scroll()
 end)
 
 -- ── Startup State ─────────────────────────────────────────────────────────────
-sbar.exec('osascript -e "output volume of (get volume settings)"', function(vol)
+-- helpers/volume reads it through CoreAudio (osascript costs ~120 ms per call)
+sbar.exec("$CONFIG_DIR/helpers/volume/bin/volume", function(vol)
   -- Extra parentheses: gsub returns (string, count) and count would become the base
   current_volume = tonumber((tostring(vol or ""):gsub("%s+", ""))) or 0
   refresh_device()

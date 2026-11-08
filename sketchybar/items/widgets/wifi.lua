@@ -69,9 +69,19 @@ local function paint()
   wifi:set({ icon = { string = icon, color = state.connected and colors.label or colors.tertiary_label } })
 end
 
+-- Reconnecting (e.g. at wake) sends wifi_change several times in a row: one
+-- read at a time, a burst folds into one more
+local reading, read_again = false, false
+
 local function update()
   if iface then
-    read_state(function() paint(); menu:refresh() end)
+    if reading then read_again = true; return end
+    reading, read_again = true, false
+    read_state(function()
+      reading = false
+      if read_again then return update() end
+      paint(); menu:refresh()
+    end)
     return
   end
   sbar.exec("networksetup -listallhardwareports 2>/dev/null | awk '/Wi-Fi/{getline; print $2; exit}'", function(result)

@@ -66,15 +66,22 @@ yabai -m signal --add label=arrange_spaces event=display_added \
 make -C "$HOME/.config/yabai/helpers" >/dev/null
 
 # ── SketchyBar Refresh Signals ────────────────────────────────────────────────
-# sketchybar's own space_windows_change fires before yabai has updated its
-# window list (e.g. an app that just quit is still listed), and some apps
-# (Claude Desktop, Preview) don't emit it reliably at all. yabai signals run
-# after its state is up to date, so they drive the space icons for every app.
-# window_moved is intentionally excluded: it fires continuously during a drag
-# and never changes which windows are visible on a space.
+# These signals are the only source of the bar's space icons (with skhd, which
+# triggers the refresh after moving a window to another space). sketchybar's
+# own space_windows_change isn't used: it fires before yabai has updated its
+# window list, misses some apps (Claude Desktop, Preview), and makes sketchybar
+# track every window through the WindowServer. yabai signals run once its
+# state is up to date.
+# Each signal starts a process, so only events that change the icons count:
+# window_moved fires continuously during a drag, and application_launched
+# comes before the app has any window (window_created follows). A window
+# entering or leaving native fullscreen moves to or from a space of its own:
+# space_created / space_destroyed cover it.
 # Labels make the signals idempotent if this file is sourced again without a restart.
+yabai -m signal --remove sketchybar_application_launched 2>/dev/null
 for event in window_created window_destroyed window_minimized window_deminimized \
-             application_launched application_terminated application_hidden application_visible; do
+             application_terminated application_hidden application_visible \
+             space_created space_destroyed; do
     yabai -m signal --add label="sketchybar_$event" event="$event" \
         action="sketchybar --trigger force_space_refresh"
 done

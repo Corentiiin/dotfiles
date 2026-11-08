@@ -106,7 +106,7 @@ brew install --cask sf-symbols font-sf-pro font-sketchybar-app-font
 (git clone https://github.com/FelixKratz/SbarLua.git /tmp/SbarLua && cd /tmp/SbarLua && make install && rm -rf /tmp/SbarLua)
 ```
 
-Les deux petits programmes de sketchybar (`menus` pour les menus Apple et des apps, `bar_events` pour l'horloge et la batterie) sont compilés au démarrage. Il faut donc les Xcode Command Line Tools.
+Les petits programmes de sketchybar (`menus` pour les menus Apple et des apps, `bar_events` pour l'horloge et la batterie, `volume` pour lire le volume) et celui de yabai (`warp_mouse`, qui déplace la souris d'un écran à l'autre) sont compilés au démarrage. Il faut donc les Xcode Command Line Tools.
 
 sketchybar est recompilé avec un correctif (`sketchybar/patches/`) : sans lui, il détruit et recrée toute la barre à chaque sortie de veille et à chaque déverrouillage. Le script recompile la version installée par Homebrew et la remplace. Il est à relancer après chaque `brew upgrade sketchybar` (annulation : `brew reinstall sketchybar`) :
 

@@ -73,6 +73,14 @@ static int run(char *const argv[], char *output, size_t size) {
   return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
 }
 
+// Timestamped line in the sketchybar error log
+static void log_line(const char* message) {
+  char stamp[32];
+  time_t now = time(NULL);
+  strftime(stamp, sizeof(stamp), "%Y-%m-%d %H:%M:%S", localtime(&now));
+  fprintf(stderr, "%s bar_events: %s\n", stamp, message);
+}
+
 // Returns false when sketchybar could not be reached. A single failure can be
 // transient (e.g. during a reload); only give up after several in a row, which
 // means sketchybar is gone for good.
@@ -85,27 +93,41 @@ static bool trigger(char *const argv[]) {
     return true;
   }
 
-  fprintf(stderr, "bar_events: '%s %s' failed (status %d)\n", argv[1], argv[2], status);
+  char message[96];
+  snprintf(message, sizeof(message), "'%s %s' failed (status %d)", argv[1], argv[2], status);
+  log_line(message);
   if (++consecutive_failures >= 3) exit(0);
   return false;
 }
 
 // ── Watchdog ─────────────────────────────────────────────────────────────────
 // SbarLua waits for sketchybar on every call, while sketchybar blocks when it
-// pushes events to Lua and Lua's queue is full. After a burst (e.g. unlocking
-// after sleep) both can end up waiting on each other and the bar freezes for
-// good. Lua handles clock_tick within milliseconds: if the clock still doesn't
-// show the new minute a few seconds later, kill the Lua config and reload it.
-// The reload starts a new instance of this helper and kills this one.
+// pushes events to Lua and Lua's queue is full. After a burst both can end up
+// waiting on each other and the bar freezes for good. Lua handles clock_tick
+// within milliseconds: if the clock misses several minutes in a row, kill the
+// Lua config and reload it. The reload starts a new instance of this helper
+// and kills this one.
 //
-// Only while the display is on and the screen unlocked: during a DarkWake
-// (maintenance wake with the display off) or behind the lock screen the GUI
-// barely runs and the clock lags behind. Reloading there every minute stacks
-// up configs that can't finish starting, and the bar is left half-built at
-// unlock.
-// A second look 10 s later rules out a merely slow wake.
-#define WATCHDOG_DELAY  5
-#define WATCHDOG_RETRY 10
+// A reload rebuilds the whole bar, so it is the last resort and never runs
+// while the system is merely slow:
+//  - only with the display on and the screen unlocked (during a DarkWake or
+//    behind the lock screen the GUI barely runs and the clock lags behind);
+//  - not in the first minutes after a wake, an unlock or this helper's start,
+//    when macOS itself is catching up and a reload only adds to the load;
+//  - only after WATCHDOG_STRIKES missed minutes in a row.
+// So reloads can't chain every minute, which used to bog the Mac down after a
+// long sleep.
+#define WATCHDOG_DELAY    5   // seconds after the tick before looking
+#define WATCHDOG_GRACE  180   // seconds of quiet after a wake, unlock or start
+#define WATCHDOG_STRIKES  3
+
+static time_t watchdog_quiet_until = 0;
+static int watchdog_strikes = 0;
+
+static void watchdog_quiet(void) {
+  watchdog_quiet_until = time(NULL) + WATCHDOG_GRACE;
+  watchdog_strikes = 0;
+}
 
 // The config started this helper through sbar.exec: sketchybar → lua → sh
 // (running as bash) → bar_events. Kill exactly the lua ancestor, never a
@@ -130,10 +152,13 @@ static bool screen_is_locked(void) {
   return result;
 }
 
-static void check_clock(time_t ticked, bool retry) {
+static void check_clock(time_t ticked) {
   // Slept since the tick (the delay doesn't run during sleep): nothing to compare
-  if (time(NULL) - ticked > 30) return;
-  if (CGDisplayIsAsleep(CGMainDisplayID()) || screen_is_locked()) return;
+  if (time(NULL) - ticked > 30 || CGDisplayIsAsleep(CGMainDisplayID()) || screen_is_locked()) {
+    watchdog_quiet();
+    return;
+  }
+  if (time(NULL) < watchdog_quiet_until) return;
 
   char expected[8];
   strftime(expected, sizeof(expected), "%H:%M", localtime(&ticked));
@@ -141,15 +166,22 @@ static void check_clock(time_t ticked, bool retry) {
   char output[16384];
   char *const query[] = { "sketchybar", "--query", "calendar", NULL };
   run(query, output, sizeof(output));
-  if (strstr(output, expected)) return;
-
-  if (!retry) {
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, WATCHDOG_RETRY * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{ check_clock(ticked, true); });
+  if (strstr(output, expected)) {
+    watchdog_strikes = 0;
     return;
   }
 
-  fprintf(stderr, "bar_events: clock stuck before %s, restarting the Lua config\n", expected);
+  char message[96];
+  if (++watchdog_strikes < WATCHDOG_STRIKES) {
+    snprintf(message, sizeof(message), "clock missed %s (%d/%d)", expected,
+             watchdog_strikes, WATCHDOG_STRIKES);
+    log_line(message);
+    return;
+  }
+
+  snprintf(message, sizeof(message), "clock missed %s, restarting the Lua config", expected);
+  log_line(message);
+  watchdog_quiet();
   kill_lua_config();
   char *const reload[] = { "sketchybar", "--reload", NULL };
   run(reload, NULL, 0);
@@ -176,9 +208,15 @@ static void schedule_clock_tick(void) {
 static void clock_tick(void) {
   char *const argv[] = { "sketchybar", "--trigger", "clock_tick", NULL };
   time_t ticked = time(NULL);
+  // The timer doesn't run during sleep: a tick long after the previous one
+  // means the Mac just woke up
+  static time_t previous_tick = 0;
+  if (previous_tick && ticked - previous_tick > 90) watchdog_quiet();
+  previous_tick = ticked;
+
   if (trigger(argv)) {
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, WATCHDOG_DELAY * NSEC_PER_SEC),
-                   dispatch_get_main_queue(), ^{ check_clock(ticked, false); });
+                   dispatch_get_main_queue(), ^{ check_clock(ticked); });
   }
   schedule_clock_tick();
 }
@@ -252,6 +290,7 @@ int main(void) {
   schedule_clock_tick();
   dispatch_resume(clock_timer);
 
+  watchdog_quiet();
   send_battery(true);
   CFRunLoopRun();
   return 0;
