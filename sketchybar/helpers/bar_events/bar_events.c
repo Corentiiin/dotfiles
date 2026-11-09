@@ -1,8 +1,9 @@
 // Event provider for sketchybar: pushes changes instead of being polled.
 //
 //   clock_tick      at second 00 of every wall-clock minute
-//   battery_change  whenever macOS updates the power source info
-//                   (PERCENT=<0-100> CHARGING=<0|1> AC=<0|1>)
+//   battery_change  whenever macOS updates the power source info or Low
+//                   Power Mode is switched
+//                   (PERCENT=<0-100> CHARGING=<0|1> AC=<0|1> LPM=<0|1>)
 //
 // SIGUSR1 re-sends the current battery state (used after a reload or wake).
 // The helper exits once sketchybar can no longer be reached, and restarts the
@@ -15,6 +16,7 @@
 #include <dispatch/dispatch.h>
 #include <errno.h>
 #include <libproc.h>
+#include <notify.h>
 #include <signal.h>
 #include <spawn.h>
 #include <stdbool.h>
@@ -222,7 +224,18 @@ static void clock_tick(void) {
 }
 
 // ── Battery ──────────────────────────────────────────────────────────────────
-static int last_percent = -1, last_charging = -1, last_ac = -1;
+static int last_percent = -1, last_charging = -1, last_ac = -1, last_lpm = -1;
+
+// Low Power Mode is published as the state of a system notification
+#define LOW_POWER_NOTIFICATION "com.apple.system.lowpowermode"
+static int low_power_token = NOTIFY_TOKEN_INVALID;
+
+static int low_power_mode(void) {
+  uint64_t state = 0;
+  if (low_power_token == NOTIFY_TOKEN_INVALID) return 0;
+  notify_get_state(low_power_token, &state);
+  return state != 0;
+}
 
 static bool dict_bool(CFDictionaryRef dict, CFStringRef key) {
   CFBooleanRef value = CFDictionaryGetValue(dict, key);
@@ -253,17 +266,19 @@ static void send_battery(bool force) {
     int charging = dict_bool(source, CFSTR(kIOPSIsChargingKey));
     CFStringRef state = CFDictionaryGetValue(source, CFSTR(kIOPSPowerSourceStateKey));
     int ac = state && CFEqual(state, CFSTR(kIOPSACPowerValue));
+    int lpm = low_power_mode();
 
     // The notification also fires for time-remaining updates: skip no-ops
-    if (force || percent != last_percent || charging != last_charging || ac != last_ac) {
-      char percent_arg[32], charging_arg[16], ac_arg[16];
+    if (force || percent != last_percent || charging != last_charging || ac != last_ac || lpm != last_lpm) {
+      char percent_arg[32], charging_arg[16], ac_arg[16], lpm_arg[16];
       snprintf(percent_arg, sizeof(percent_arg), "PERCENT=%d", percent);
       snprintf(charging_arg, sizeof(charging_arg), "CHARGING=%d", charging);
       snprintf(ac_arg, sizeof(ac_arg), "AC=%d", ac);
+      snprintf(lpm_arg, sizeof(lpm_arg), "LPM=%d", lpm);
       char *const argv[] = { "sketchybar", "--trigger", "battery_change",
-                             percent_arg, charging_arg, ac_arg, NULL };
+                             percent_arg, charging_arg, ac_arg, lpm_arg, NULL };
       // Only remember what sketchybar actually received, so a failure is retried
-      if (trigger(argv)) last_percent = percent, last_charging = charging, last_ac = ac;
+      if (trigger(argv)) last_percent = percent, last_charging = charging, last_ac = ac, last_lpm = lpm;
     }
     break;
   }
@@ -280,6 +295,9 @@ int main(void) {
                                                     dispatch_get_main_queue());
   dispatch_source_set_event_handler(resend, ^{ send_battery(true); });
   dispatch_resume(resend);
+
+  notify_register_dispatch(LOW_POWER_NOTIFICATION, &low_power_token, dispatch_get_main_queue(),
+                           ^(int token) { send_battery(false); });
 
   CFRunLoopSourceRef power = IOPSNotificationCreateRunLoopSource(power_sources_changed, NULL);
   if (power) CFRunLoopAddSource(CFRunLoopGetMain(), power, kCFRunLoopDefaultMode);

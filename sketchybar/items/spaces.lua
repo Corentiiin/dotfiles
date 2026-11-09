@@ -14,6 +14,14 @@ local ICON_SCALE = 0.5 -- app images are 32 pt at scale 1
 local ICON_SIZE  = 32 * ICON_SCALE
 local ICON_GAP   = 2
 local EDGE       = 9   -- inner padding at both ends of a segment
+local EDGE_EMPTY = 7   -- same for a space without apps: a compact round pill
+-- Each icon sits in a cell: the icon plus CELL_PAD on both sides
+local CELL_PAD   = 2
+local CELL       = ICON_SIZE + 2 * CELL_PAD
+-- Icons sit 1 pt above the centre, leaving room below for the Dock-style dot
+-- that marks the frontmost app
+local ICON_LIFT  = 1
+local DOT        = { string = "●", font = "SF Pro:Bold:4.0", y_offset = -9 }
 
 local number_font = {
   family = settings.font.rounded,
@@ -46,8 +54,8 @@ for i = 1, MAX_SPACES do
       string        = i,
       font          = number_font,
       color         = colors.tertiary_label,
-      padding_left  = EDGE,
-      padding_right = EDGE,
+      padding_left  = EDGE_EMPTY,
+      padding_right = EDGE_EMPTY,
     },
     label      = { drawing = false },
     background = { drawing = false },
@@ -125,6 +133,38 @@ end
 local bundle_ids = {} -- app name -> bundle id, or false when it can't be resolved
 local pending    = {}
 
+-- Bundle ids are kept on disk ("name<TAB>bundle id" lines): the icons are in
+-- colour from the first frame, without one lsappinfo per app at every load
+local CACHE_DIR  = os.getenv("HOME") .. "/.cache/sketchybar"
+local CACHE_FILE = CACHE_DIR .. "/bundle_ids"
+
+do
+  local file = io.open(CACHE_FILE, "r")
+  if file then
+    for line in file:lines() do
+      local name, bundle = line:match("^(.-)\t(.+)$")
+      if name then bundle_ids[name] = bundle end
+    end
+    file:close()
+  end
+end
+
+local function remember_bundle(name, bundle)
+  local file = io.open(CACHE_FILE, "a")
+  if not file then
+    os.execute('mkdir -p "' .. CACHE_DIR .. '"')
+    file = io.open(CACHE_FILE, "a")
+  end
+  if file then
+    file:write(name, "\t", bundle, "\n")
+    file:close()
+  end
+end
+
+-- The frontmost app's icon gets a dot under it (see paint_dot)
+local front_app = nil -- app name
+local dotted    = nil -- the slot item currently showing the dot
+
 local function render(i)
   local s    = state[i]
   local apps = s.apps
@@ -136,6 +176,11 @@ local function render(i)
   signature = table.concat(signature, ",")
   if signature == s.signature then return end
   s.signature = signature
+  -- The slots are about to show other apps: the dot is worked out again
+  if dotted then
+    dotted:set({ label = { drawing = false } })
+    dotted = nil
+  end
 
   -- The space number only shows on its own display; the icons must follow it
   -- or every display would show the icons of every space
@@ -143,7 +188,10 @@ local function render(i)
   for _, slot in ipairs(app_slots[i]) do slot:set({ display = display }) end
   if overflow[i] then overflow[i]:set({ display = display }) end
 
-  numbers[i]:set({ icon = { padding_right = (#apps > 0) and 5 or EDGE } })
+  numbers[i]:set({ icon = {
+    padding_left  = (#apps > 0) and EDGE or EDGE_EMPTY,
+    padding_right = (#apps > 0) and (5 - CELL_PAD) or EDGE_EMPTY,
+  } })
 
   for j, slot in ipairs(app_slots[i]) do
     local app  = apps[j]
@@ -154,10 +202,11 @@ local function render(i)
       local bundle  = bundle_ids[app.name]
       local padding = last and EDGE or ICON_GAP
       if bundle then
-        -- Image-only icons ignore their padding, so the gap comes from a fixed width
+        -- Image-only icons ignore their padding, so the gap comes from a fixed
+        -- width; the cell already brings CELL_PAD on each side
         slot:set({
           drawing = true,
-          width   = ICON_SIZE + padding,
+          width   = CELL + (last and (EDGE - CELL_PAD) or 0),
           icon = {
             string        = "",
             padding_right = 0,
@@ -191,6 +240,25 @@ local function render(i)
   paint(i)
 end
 
+-- ── Front App Dot ─────────────────────────────────────────────────────────────
+-- Marks the frontmost app's icon in the selected space with a small dot
+-- under it, like the Dock. Only image slots: their fixed width keeps the dot
+-- (a label pulled back under the icon) out of the layout.
+local function paint_dot()
+  local target
+  for i = 1, MAX_SPACES do
+    if state[i].selected then
+      for j, app in ipairs(state[i].apps) do
+        if app.name == front_app and bundle_ids[app.name] then target = app_slots[i][j] end
+      end
+    end
+  end
+  if target == dotted then return end
+  if dotted then dotted:set({ label = { drawing = false } }) end
+  if target then target:set({ label = { drawing = true } }) end
+  dotted = target
+end
+
 -- ── Interaction ───────────────────────────────────────────────────────────────
 local function on_click(i, env, window)
   if env.BUTTON == "right" then
@@ -217,6 +285,18 @@ local function hover(i, on)
   end
 end
 
+-- Scrolling over the spaces moves to the previous / next one, like turning a
+-- carousel. A gesture sends many events: one switch, then a short pause.
+local scroll_paused = false
+
+local function on_scroll(env)
+  local delta = tonumber(env.INFO and env.INFO.delta) or 0
+  if scroll_paused or delta == 0 then return end
+  scroll_paused = true
+  sbar.exec("yabai -m space --focus " .. (delta > 0 and "prev" or "next"))
+  sbar.delay(0.25, function() scroll_paused = false end)
+end
+
 local function wire(i, part, on_clicked)
   part:subscribe("mouse.entered", hover(i, true))
   -- Not mouse.exited.global: it reaches every subscriber at once when the
@@ -224,6 +304,7 @@ local function wire(i, part, on_clicked)
   -- deadlocks with sketchybar (each waiting on the other's mach message)
   part:subscribe("mouse.exited", hover(i, false))
   part:subscribe("mouse.clicked", on_clicked)
+  part:subscribe("mouse.scrolled", on_scroll)
 end
 
 -- ── Growing ───────────────────────────────────────────────────────────────────
@@ -246,12 +327,23 @@ local function grow(done)
           padding_left  = 0,
           padding_right = ICON_GAP,
           background    = {
-            drawing = true,
-            color   = colors.transparent,
-            image   = { scale = ICON_SCALE, drawing = true },
+            drawing  = true,
+            color    = colors.transparent,
+            y_offset = ICON_LIFT,
+            image    = { scale = ICON_SCALE, drawing = true,
+                         padding_left = CELL_PAD, padding_right = CELL_PAD },
           },
         },
-        label = { drawing = false },
+        -- The dot: drawn after the icon, pulled back to sit centred under it
+        label = {
+          drawing       = false,
+          string        = DOT.string,
+          font          = DOT.font,
+          color         = colors.label,
+          y_offset      = DOT.y_offset,
+          padding_left  = -(CELL / 2 + 2),
+          padding_right = 0,
+        },
       })
       app_slots[i][j] = slot
       wire(i, slot, function(env)
@@ -297,6 +389,7 @@ local function resolve_bundle(app)
   sbar.exec('lsappinfo info -only bundleid "$(lsappinfo find pid=' .. app.pid .. ')"', function(result)
     pending[app.name] = nil
     bundle_ids[app.name] = tostring(result or ""):match('"CFBundleIdentifier"="(.-)"') or false
+    if bundle_ids[app.name] then remember_bundle(app.name, bundle_ids[app.name]) end
     for i = 1, MAX_SPACES do
       for _, a in ipairs(state[i].apps) do
         if a.name == app.name then render(i); break end
@@ -315,14 +408,31 @@ local refresh_again = false
 
 local refresh
 
-local function apply(windows)
-  if type(windows) ~= "table" then return end
+local function apply(result)
+  if type(result) ~= "table" or type(result.windows) ~= "table" then return end
+  local windows = result.windows
+
+  -- A native fullscreen app gets a space of its own, numbered like any other
+  -- (e.g. 9 with a single display): hide that number, it isn't a desktop
+  local is_fullscreen = {}
+  for _, space in ipairs(result.spaces or {}) do
+    is_fullscreen[space.index] = space["is-native-fullscreen"] == true
+  end
+  for i = 1, MAX_SPACES do
+    local fullscreen = is_fullscreen[i] or false
+    if state[i].fullscreen ~= fullscreen then
+      state[i].fullscreen = fullscreen
+      numbers[i]:set({ drawing = not fullscreen })
+    end
+  end
 
   local by_space   = {}
   local display_of = {} -- space index -> yabai display index (= sketchybar's)
   for i = 1, MAX_SPACES do by_space[i] = {} end
 
+  local focused -- app of the focused window
   for _, w in ipairs(windows) do
+    if w["has-focus"] then focused = w.app end
     display_of[w.space] = w.display
     local apps = by_space[w.space]
     -- Some apps (Claude Desktop) only order their window out when it is
@@ -348,8 +458,10 @@ local function apply(windows)
     for _, app in ipairs(list) do resolve_bundle(app) end
   end
 
+  if focused then front_app = focused end
   grow(function()
     for i = 1, MAX_SPACES do render(i) end
+    paint_dot()
   end)
 end
 
@@ -359,10 +471,11 @@ refresh = function()
     return
   end
   in_flight, refresh_again = os.time(), false
-  sbar.exec("yabai -m query --windows 2>/dev/null", function(windows)
+  -- Windows and spaces in one JSON document, so one callback has both
+  sbar.exec([[printf '{"windows":%s,"spaces":%s}' "$(yabai -m query --windows 2>/dev/null)" "$(yabai -m query --spaces 2>/dev/null)"]], function(result)
     in_flight = nil
     if refresh_again then return refresh() end
-    apply(windows)
+    apply(result)
   end)
 end
 
@@ -384,8 +497,14 @@ for i = 1, MAX_SPACES do
   numbers[i]:subscribe("space_change", function(env)
     state[i].selected = env.SELECTED == "true"
     paint(i)
+    paint_dot()
   end)
   wire(i, numbers[i], function(env) on_click(i, env) end)
 end
+
+start_pad:subscribe("front_app_switched", function(env)
+  front_app = env.INFO
+  paint_dot()
+end)
 
 refresh()

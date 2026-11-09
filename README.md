@@ -34,16 +34,16 @@ De gauche à droite :
 | Élément | Affichage | Clic |
 |---|---|---|
 | Pomme | Logo Apple | Ouvre le vrai menu Apple |
-| Espaces | Un segment par espace : son numéro et les icônes des apps ouvertes dessus (5 au plus, puis `+n`). L'espace actif est surligné. | Va sur l'espace. Clic sur une icône : va directement sur cette fenêtre. Clic droit sur l'espace 9 ou 10 : le supprime. |
+| Espaces | Un segment par espace : son numéro et les icônes des apps ouvertes dessus (5 au plus, puis `+n`). L'espace actif est surligné, et l'app au premier plan est marquée d'un petit point sous son icône, comme dans le Dock. | Va sur l'espace. Clic sur une icône : va directement sur cette fenêtre. Molette sur les espaces : espace précédent / suivant. Clic droit sur l'espace 9 ou 10 : le supprime. |
 | App active | Nom de l'app au premier plan, en gras | Ouvre le menu de l'app |
-| Batterie | Pourcentage et jauge (verte en charge, rouge sous 20 %) | Ouvre les réglages Batterie |
+| Batterie | Pourcentage et jauge (verte en charge, jaune en mode économie d'énergie, rouge sous 20 %) | Menu Batterie : charge, source d'alimentation, autonomie ou temps de charge restant, lien vers les réglages |
 | Wi-Fi | État de la connexion | Menu Wi-Fi : interrupteur, réseau ou partage de connexion, adresse IP, routeur, sécurité |
 | Son | Volume, ou icône des AirPods / HomePod connectés | Menu Son : curseur de volume et choix de la sortie audio. Molette : volume (`⌃` + molette pour un réglage fin). Clic droit : réglages Son. |
 | Horloge | Date et heure (`Sat Oct 31  15:20`) | Ouvre Calendrier |
 
 - **Mises à jour en temps réel** : l'horloge change à la seconde 00 de chaque minute, la batterie dès que macOS signale un changement. Rien n'est interrogé en boucle, la barre ne consomme presque rien au repos.
 - **Icônes des apps** : elles apparaissent et disparaissent dès qu'une fenêtre s'ouvre, se ferme, est réduite ou change d'espace.
-- **Menus Son et Wi-Fi** : au style des menus macOS, ils suivent le thème clair ou sombre du système et se ferment quand la souris quitte la barre.
+- **Menus Son, Wi-Fi et Batterie** : au style des menus macOS, ils suivent le thème clair ou sombre du système et se ferment quand la souris quitte la barre.
 
 ### Raccourcis clavier
 

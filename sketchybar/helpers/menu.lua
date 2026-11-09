@@ -22,6 +22,7 @@ local CIRCLE = 26
 -- macOS 26 toggle, drawn by assets/make_toggles.py (a glyph knob can't be
 -- centered reliably: SF Symbols sit on the text baseline)
 local TOGGLE_W = 54
+local VALUE_W  = 70                -- right-aligned value in a title row
 local TOGGLE_IMAGE = os.getenv("CONFIG_DIR") .. "/assets/toggle_%s_%s.png"
 local KNOB = "􀀁"
 
@@ -106,8 +107,9 @@ function Menu:spacer(height)
   })
 end
 
--- Bold module title, optionally with an Apple toggle on the right
-function Menu:title(text, toggle)
+-- Bold module title, optionally with an Apple toggle or a grey value
+-- ("49 %") on the right
+function Menu:title(text, toggle, value)
   local p = self.palette
   local props = {
     width = ROW, padding_left = INSET, padding_right = INSET,
@@ -138,6 +140,19 @@ function Menu:title(text, toggle)
           scale  = 0.5,
         },
       },
+    }
+  end
+  if value then
+    props.icon.width = ROW - VALUE_W - (TEXT - INSET)
+    props.label = {
+      drawing       = true,
+      string        = value,
+      font          = font("Regular", 13.0),
+      color         = p.secondary,
+      width         = VALUE_W,
+      align         = "right",
+      padding_left  = 0,
+      padding_right = 0,
     }
   end
   local item = self:add(props)

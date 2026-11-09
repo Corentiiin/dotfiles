@@ -3,7 +3,10 @@ local colors = require("colors")
 
 -- Equivalent to the --default domain
 sbar.default({
-  updates = "when_shown",
+  -- Not "when_shown": the bar isn't shown behind a fullscreen app or the lock
+  -- screen, and items would miss their events there (clock, battery, Wi-Fi),
+  -- coming back stale. Events are rare, so handling them unseen costs nothing.
+  updates = true,
   label = {
     font = {
       family = settings.font.text,
@@ -45,5 +48,6 @@ sbar.default({
   },
   padding_left = 5,
   padding_right = 5,
-  scroll_texts = true,
+  -- Scrolling a text that overflows runs an animation on every frame
+  scroll_texts = false,
 })

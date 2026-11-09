@@ -34,9 +34,14 @@ front_app:subscribe("front_app_switched", function(env)
   set_app(env.INFO)
 end)
 
--- Populate label immediately on startup without waiting for the first app switch
--- (lsappinfo needs no Automation permission, unlike osascript + System Events)
-sbar.exec('lsappinfo info -only name "$(lsappinfo front)"', function(result)
-  local name = tostring(result or ""):match('"LSDisplayName"="(.-)"')
-  if name and name ~= "" then set_app(name) end
-end)
+-- Read once at load, before the first frame, instead of waiting for the first
+-- app switch (lsappinfo needs no Automation permission, unlike osascript +
+-- System Events, and answers in ~10 ms)
+do
+  local pipe = io.popen('lsappinfo info -only name "$(lsappinfo front)" 2>/dev/null')
+  if pipe then
+    local name = pipe:read("a"):match('"LSDisplayName"="(.-)"')
+    pipe:close()
+    if name and name ~= "" then set_app(name) end
+  end
+end
